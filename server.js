@@ -37,8 +37,6 @@ const db = new sqlite3.Database('pdfs.db', (err) => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       filename TEXT NOT NULL,
       original_name TEXT NOT NULL,
-      mime_type TEXT NOT NULL,
-      size INTEGER NOT NULL,
       data BLOB NOT NULL,
       upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -55,20 +53,18 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
       return res.status(400).json({ error: 'No PDF file uploaded' });
     }
 
-    const { originalname, mimetype, buffer, size } = req.file;
+    const { originalname, buffer } = req.file;
     const filename = Date.now() + '-' + path.basename(originalname);
 
     // Insert PDF into database
     const stmt = db.prepare(`
-      INSERT INTO pdfs (filename, original_name, mime_type, size, data)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO pdfs (filename, original_name, data)
+      VALUES (?, ?, ?)
     `);
 
     stmt.run(
       filename,
       originalname,
-      mimetype,
-      size,
       buffer,
       function(err) {
         if (err) {
@@ -80,8 +76,7 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
           message: 'PDF uploaded successfully',
           id: this.lastID,
           filename,
-          originalname,
-          size
+          originalname
         });
       }
     );
@@ -91,10 +86,26 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
   }
 });
 
+// GET endpoint to fetch database schema
+app.get('/schema', (req, res) => {
+  db.all(
+    `SELECT name, type
+     FROM pragma_table_info('pdfs')`,
+    (err, rows) => {
+      if (err) {
+        console.error('Error retrieving schema:', err);
+        return res.status(500).json({ error: 'Failed to retrieve schema' });
+      }
+
+      res.json(rows);
+    }
+  );
+});
+
 // GET endpoint to list all PDFs (without binary data)
 app.get('/pdfs', (req, res) => {
   db.all(
-    `SELECT id, filename, original_name, mime_type, size, upload_date 
+    `SELECT id, filename, original_name, upload_date
      FROM pdfs
      ORDER BY upload_date DESC`,
     (err, rows) => {
@@ -102,11 +113,11 @@ app.get('/pdfs', (req, res) => {
         console.error('Error retrieving PDFs:', err);
         return res.status(500).json({ error: 'Failed to retrieve PDF list' });
       }
+
       res.json(rows);
     }
   );
 });
-
 
 // GET endpoint to retrieve PDF by ID
 app.get('/pdf/:id', (req, res) => {
@@ -123,23 +134,12 @@ app.get('/pdf/:id', (req, res) => {
     }
 
     res.set({
-      'Content-Type': row.mime_type,
+      'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="${row.original_name}"`,
-      'Content-Length': row.size
+      'Content-Length': Buffer.byteLength(row.data)
     });
 
     res.send(row.data);
-  });
-});
-
-// GET endpoint to retrieve table schema
-app.get('/schema', (req, res) => {
-  db.all("PRAGMA table_info(pdfs)", [], (err, rows) => {
-    if (err) {
-      console.error('Error retrieving schema:', err);
-      return res.status(500).json({ error: 'Failed to retrieve schema' });
-    }
-    res.json(rows);
   });
 });
 
