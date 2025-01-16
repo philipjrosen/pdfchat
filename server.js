@@ -91,6 +91,23 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
   }
 });
 
+// GET endpoint to list all PDFs (without binary data)
+app.get('/pdfs', (req, res) => {
+  db.all(
+    `SELECT id, filename, original_name, mime_type, size, upload_date 
+     FROM pdfs
+     ORDER BY upload_date DESC`,
+    (err, rows) => {
+      if (err) {
+        console.error('Error retrieving PDFs:', err);
+        return res.status(500).json({ error: 'Failed to retrieve PDF list' });
+      }
+      res.json(rows);
+    }
+  );
+});
+
+
 // GET endpoint to retrieve PDF by ID
 app.get('/pdf/:id', (req, res) => {
   const { id } = req.params;
