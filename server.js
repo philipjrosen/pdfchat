@@ -115,6 +115,17 @@ app.get('/pdf/:id', (req, res) => {
   });
 });
 
+// GET endpoint to retrieve table schema
+app.get('/schema', (req, res) => {
+  db.all("PRAGMA table_info(pdfs)", [], (err, rows) => {
+    if (err) {
+      console.error('Error retrieving schema:', err);
+      return res.status(500).json({ error: 'Failed to retrieve schema' });
+    }
+    res.json(rows);
+  });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
