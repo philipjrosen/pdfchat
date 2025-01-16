@@ -1,0 +1,17 @@
+{
+  "name": "pdfchat",
+  "version": "1.0.0",
+  "description": "Upload a PDF document and chat with it",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "Philip Rosen",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1",
+    "sqlite3": "^5.1.7"
+  }
+}
