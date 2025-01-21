@@ -32,8 +32,8 @@ const db = new sqlite3.Database('pdfs.db', (err) => {
   db.run(`
     CREATE TABLE IF NOT EXISTS pdfs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      original_name TEXT NOT NULL,
-      data BLOB NOT NULL,
+      filename TEXT NOT NULL,
+      pdf_content BLOB NOT NULL,
       upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -55,8 +55,8 @@ app.post('/reset', (req, res) => {
     db.run(`
       CREATE TABLE pdfs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        original_name TEXT NOT NULL,
-        data BLOB NOT NULL,
+        filename TEXT NOT NULL,
+        pdf_content BLOB NOT NULL,
         upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `, (err) => {
@@ -78,11 +78,10 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
     }
 
     const { originalname, buffer } = req.file;
-		console.log(originalname);
 
     // Insert PDF into database
     const stmt = db.prepare(`
-      INSERT INTO pdfs (original_name, data)
+      INSERT INTO pdfs (filename, pdf_content)
       VALUES (?, ?)
     `);
 
@@ -98,7 +97,7 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
         res.json({
           message: 'PDF uploaded successfully',
           id: this.lastID,
-          originalname
+          filename: originalname
         });
       }
     );
@@ -127,7 +126,7 @@ app.get('/schema', (req, res) => {
 // GET endpoint to list all PDFs (without binary data)
 app.get('/pdfs', (req, res) => {
   db.all(
-    `SELECT id, original_name, upload_date
+    `SELECT id, filename, upload_date
      FROM pdfs
      ORDER BY upload_date DESC`,
     (err, rows) => {
@@ -157,11 +156,11 @@ app.get('/pdf/:id', (req, res) => {
 
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="${row.original_name}"`,
-      'Content-Length': Buffer.byteLength(row.data)
+      'Content-Disposition': `inline; filename="${row.filename}"`,
+      'Content-Length': Buffer.byteLength(row.pdf_content)
     });
 
-    res.send(row.data);
+    res.send(row.pdf_content);
   });
 });
 
