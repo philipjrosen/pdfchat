@@ -215,6 +215,30 @@ app.get('/pdf/:id', (req, res) => {
   });
 });
 
+// GET endpoint to retrieve text content by ID
+app.get('/text/:id', (req, res) => {
+  const { id } = req.params;
+
+  db.get('SELECT text_content FROM pdfs WHERE id = ?', [id], (err, row) => {
+    if (err) {
+      console.error('Error retrieving text:', err);
+      return res.status(500).json({ error: 'Failed to retrieve text content' });
+    }
+
+    if (!row) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (!row.text_content) {
+      return res.status(404).json({
+        error: 'No text content available for this document. It may only have PDF content.'
+      });
+    }
+
+    res.json({ text_content: row.text_content });
+  });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
