@@ -46,6 +46,35 @@ const db = new sqlite3.Database('pdfs.db', (err) => {
 // Middleware for parsing JSON
 app.use(express.json());
 
+// POST endpoint to reset database
+app.post('/reset', (req, res) => {
+  // Drop the table if it exists
+  db.run('DROP TABLE IF EXISTS pdfs', (err) => {
+    if (err) {
+      console.error('Error dropping table:', err);
+      return res.status(500).json({ error: 'Failed to reset database' });
+    }
+
+    // Recreate the table
+    db.run(`
+      CREATE TABLE pdfs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        filename TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        data BLOB NOT NULL,
+        upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `, (err) => {
+      if (err) {
+        console.error('Error recreating table:', err);
+        return res.status(500).json({ error: 'Failed to recreate table' });
+      }
+
+      res.json({ message: 'Database reset successfully' });
+    });
+  });
+});
+
 // POST endpoint for uploading PDFs
 app.post('/upload', upload.single('pdf'), async (req, res) => {
   try {
