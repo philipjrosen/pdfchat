@@ -97,7 +97,6 @@ app.post('/reset', (req, res) => {
 });
 
 // POST endpoint for uploading PDFs
-// POST endpoint for uploading PDFs
 app.post('/upload', upload.single('pdf'), async (req, res) => {
   try {
     if (!req.file) {
@@ -106,8 +105,8 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
 
     const { originalname, buffer } = req.file;
     const shouldExtractText = req.query.extractText === 'true';
-
     let text_content = null;
+
     if (shouldExtractText) {
       try {
         text_content = await extractPdfText(new Uint8Array(buffer));
@@ -117,35 +116,67 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
       }
     }
 
-    // Insert into database
-    const stmt = db.prepare(`
-      INSERT INTO pdfs (filename, pdf_content, text_content)
-      VALUES (?, ?, ?)
-    `);
-
-    stmt.run(
-      originalname,
-      shouldExtractText ? null : buffer,
-      text_content,
-      function(err) {
-        if (err) {
-          console.error('Error inserting PDF:', err);
-          return res.status(500).json({ error: 'Failed to store PDF' });
-        }
-
-        const response = {
-          message: 'PDF processed successfully',
-          id: this.lastID,
-          filename: originalname
-        };
-
-        if (text_content) {
-          response.text_content = text_content;
-        }
-
-        res.json(response);
+    // Check if file already exists
+    db.get('SELECT id, pdf_content, text_content FROM pdfs WHERE filename = ?', [originalname], (err, existing) => {
+      if (err) {
+        console.error('Error checking for existing file:', err);
+        return res.status(500).json({ error: 'Database error' });
       }
-    );
+
+      if (existing) {
+        // Update existing record
+        const stmt = db.prepare(`
+          UPDATE pdfs 
+          SET pdf_content = COALESCE(?, pdf_content),
+              text_content = COALESCE(?, text_content)
+          WHERE id = ?
+        `);
+
+        stmt.run(
+          shouldExtractText ? null : buffer,
+          text_content,
+          existing.id,
+          function(err) {
+            if (err) {
+              console.error('Error updating record:', err);
+              return res.status(500).json({ error: 'Failed to update record' });
+            }
+
+            res.json({
+              message: 'Document updated successfully',
+              id: existing.id,
+              filename: originalname,
+              text_content: text_content || existing.text_content
+            });
+          }
+        );
+      } else {
+        // Insert new record
+        const stmt = db.prepare(`
+          INSERT INTO pdfs (filename, pdf_content, text_content)
+          VALUES (?, ?, ?)
+        `);
+
+        stmt.run(
+          originalname,
+          shouldExtractText ? null : buffer,
+          text_content,
+          function(err) {
+            if (err) {
+              console.error('Error inserting record:', err);
+              return res.status(500).json({ error: 'Failed to store record' });
+            }
+
+            res.json({
+              message: 'Document uploaded successfully',
+              id: this.lastID,
+              filename: originalname,
+              text_content: text_content
+            });
+          }
+        );
+      }
+    });
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: error.message });
@@ -168,12 +199,21 @@ app.get('/schema', (req, res) => {
   );
 });
 
-// GET endpoint to list all PDFs (without binary data)
+// GET endpoint to list all PDFs
 app.get('/pdfs', (req, res) => {
   db.all(
-    `SELECT id, filename, upload_date
+    `SELECT
+      id,
+      filename,
+      upload_date,
+      CASE
+        WHEN pdf_content IS NOT NULL AND text_content IS NOT NULL THEN 'both'
+        WHEN pdf_content IS NOT NULL THEN 'pdf'
+        WHEN text_content IS NOT NULL THEN 'text'
+        ELSE 'none'
+      END as content_type
      FROM pdfs
-     ORDER BY upload_date DESC`,
+     ORDER BY upload_date ASC`,
     (err, rows) => {
       if (err) {
         console.error('Error retrieving PDFs:', err);
