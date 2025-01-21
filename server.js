@@ -2,12 +2,9 @@ import express from 'express';
 import multer from 'multer';
 import sqlite3 from 'sqlite3';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
 const app = express();
 const port = 3000;
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Configure multer for PDF uploads
 const upload = multer({
@@ -35,7 +32,6 @@ const db = new sqlite3.Database('pdfs.db', (err) => {
   db.run(`
     CREATE TABLE IF NOT EXISTS pdfs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      filename TEXT NOT NULL,
       original_name TEXT NOT NULL,
       data BLOB NOT NULL,
       upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -59,7 +55,6 @@ app.post('/reset', (req, res) => {
     db.run(`
       CREATE TABLE pdfs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        filename TEXT NOT NULL,
         original_name TEXT NOT NULL,
         data BLOB NOT NULL,
         upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -83,16 +78,15 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
     }
 
     const { originalname, buffer } = req.file;
-    const filename = Date.now() + '-' + path.basename(originalname);
+		console.log(originalname);
 
     // Insert PDF into database
     const stmt = db.prepare(`
-      INSERT INTO pdfs (filename, original_name, data)
-      VALUES (?, ?, ?)
+      INSERT INTO pdfs (original_name, data)
+      VALUES (?, ?)
     `);
 
     stmt.run(
-      filename,
       originalname,
       buffer,
       function(err) {
@@ -104,7 +98,6 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
         res.json({
           message: 'PDF uploaded successfully',
           id: this.lastID,
-          filename,
           originalname
         });
       }
@@ -134,7 +127,7 @@ app.get('/schema', (req, res) => {
 // GET endpoint to list all PDFs (without binary data)
 app.get('/pdfs', (req, res) => {
   db.all(
-    `SELECT id, filename, original_name, upload_date
+    `SELECT id, original_name, upload_date
      FROM pdfs
      ORDER BY upload_date DESC`,
     (err, rows) => {
