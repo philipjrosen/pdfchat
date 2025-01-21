@@ -1,7 +1,13 @@
 import express from 'express';
 import multer from 'multer';
 import sqlite3 from 'sqlite3';
-import path from 'path';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+
+// Disable worker for Node environment
+pdfjsLib.GlobalWorkerOptions.disableWorker = true;
+
+// Configure font data path
+pdfjsLib.GlobalWorkerOptions.standardFontDataUrl = `node_modules/pdfjs-dist/standard_fonts/`;
 
 const app = express();
 const port = 3000;
@@ -20,6 +26,24 @@ const upload = multer({
   }
 });
 
+async function extractPdfText(buffer) {
+  try {
+    const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+    let fullText = '';
+
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map(item => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+
+    return fullText.trim();
+  } catch (error) {
+    throw new Error('Failed to extract text from PDF: ' + error.message);
+  }
+}
+
 // Initialize SQLite database
 const db = new sqlite3.Database('pdfs.db', (err) => {
   if (err) {
@@ -33,7 +57,8 @@ const db = new sqlite3.Database('pdfs.db', (err) => {
     CREATE TABLE IF NOT EXISTS pdfs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       filename TEXT NOT NULL,
-      pdf_content BLOB NOT NULL,
+      pdf_content BLOB,
+			text_content TEXT,
       upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -56,7 +81,8 @@ app.post('/reset', (req, res) => {
       CREATE TABLE pdfs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         filename TEXT NOT NULL,
-        pdf_content BLOB NOT NULL,
+        pdf_content BLOB,
+				text_content TEXT,
         upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `, (err) => {
@@ -71,6 +97,7 @@ app.post('/reset', (req, res) => {
 });
 
 // POST endpoint for uploading PDFs
+// POST endpoint for uploading PDFs
 app.post('/upload', upload.single('pdf'), async (req, res) => {
   try {
     if (!req.file) {
@@ -78,27 +105,45 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
     }
 
     const { originalname, buffer } = req.file;
+    const shouldExtractText = req.query.extractText === 'true';
 
-    // Insert PDF into database
+    let text_content = null;
+    if (shouldExtractText) {
+      try {
+        text_content = await extractPdfText(new Uint8Array(buffer));
+      } catch (parseError) {
+        console.error('Error parsing PDF:', parseError);
+        return res.status(400).json({ error: 'Failed to parse PDF text content' });
+      }
+    }
+
+    // Insert into database
     const stmt = db.prepare(`
-      INSERT INTO pdfs (filename, pdf_content)
-      VALUES (?, ?)
+      INSERT INTO pdfs (filename, pdf_content, text_content)
+      VALUES (?, ?, ?)
     `);
 
     stmt.run(
       originalname,
-      buffer,
+      shouldExtractText ? null : buffer,
+      text_content,
       function(err) {
         if (err) {
           console.error('Error inserting PDF:', err);
           return res.status(500).json({ error: 'Failed to store PDF' });
         }
 
-        res.json({
-          message: 'PDF uploaded successfully',
+        const response = {
+          message: 'PDF processed successfully',
           id: this.lastID,
           filename: originalname
-        });
+        };
+
+        if (text_content) {
+          response.text_content = text_content;
+        }
+
+        res.json(response);
       }
     );
   } catch (error) {
@@ -152,6 +197,12 @@ app.get('/pdf/:id', (req, res) => {
 
     if (!row) {
       return res.status(404).json({ error: 'PDF not found' });
+    }
+
+    if (!row.pdf_content) {
+      return res.status(404).json({
+        error: 'No PDF content available for this document. It may only have text content.'
+      });
     }
 
     res.set({
