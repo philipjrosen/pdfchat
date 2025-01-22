@@ -1,8 +1,10 @@
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { documentQueue } from '../services/queue.js';
 
-// Configure PDF.js
+// Disable worker for Node environment
 pdfjsLib.GlobalWorkerOptions.disableWorker = true;
+
+// Configure font data path
 pdfjsLib.GlobalWorkerOptions.standardFontDataUrl = `node_modules/pdfjs-dist/standard_fonts/`;
 
 export class PdfService {
