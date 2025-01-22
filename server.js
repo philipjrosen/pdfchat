@@ -1,9 +1,9 @@
 import express from 'express';
 import multer from 'multer';
-import sqlite3 from 'sqlite3';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { documentQueue } from './queue.js';
 import { config } from './config/config.js';
+import { db, dbAsync } from './database/db.js';
 
 // Disable worker for Node environment
 pdfjsLib.GlobalWorkerOptions.disableWorker = true;
@@ -48,41 +48,14 @@ async function extractPdfText(buffer) {
   }
 }
 
-// Initialize SQLite database
-export const db = new sqlite3.Database(config.database.filename, (err) => {
-  if (err) {
-    console.error('Error opening database:', err);
-    return;
-  }
-  if (process.env.NODE_ENV !== 'test') {
-    console.log('Connected to SQLite database');
-  }
-
-  // Create pdfs table if it doesn't exist
-  db.run(`
-    CREATE TABLE IF NOT EXISTS pdfs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      filename TEXT NOT NULL,
-      pdf_content BLOB,
-			text_content TEXT,
-			status TEXT DEFAULT 'PENDING',
-      upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-});
-
 // Middleware for parsing JSON
 app.use(express.json());
 
 // POST endpoint to reset database
-app.post('/reset', (req, res) => {
-  db.run('DROP TABLE IF EXISTS pdfs', (err) => {
-    if (err) {
-      console.error('Error dropping table:', err);
-      return res.status(500).json({ error: 'Failed to reset database' });
-    }
-
-    db.run(`
+app.post('/reset', async (req, res) => {
+  try {
+    await dbAsync.run('DROP TABLE IF EXISTS pdfs');
+    await dbAsync.run(`
       CREATE TABLE pdfs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         filename TEXT NOT NULL,
@@ -91,19 +64,15 @@ app.post('/reset', (req, res) => {
         status TEXT DEFAULT 'PENDING',
         upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
       )
-    `, (err) => {
-      if (err) {
-        console.error('Error recreating table:', err);
-        return res.status(500).json({ error: 'Failed to recreate table' });
-      }
-
-      res.json({ message: 'Database reset successfully' });
-    });
-  });
+    `);
+    res.json({ message: 'Database reset successfully' });
+  } catch (err) {
+    console.error('Error resetting database:', err);
+    res.status(500).json({ error: 'Failed to reset database' });
+  }
 });
 
 // POST endpoint for uploading PDFs
-// Modified upload endpoint
 app.post('/upload', upload.single('pdf'), async (req, res) => {
   try {
     if (!req.file) {
@@ -123,96 +92,71 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
       }
     }
 
-    // Check if file already exists
-    db.get('SELECT id, pdf_content, text_content FROM pdfs WHERE filename = ?', [originalname], async (err, existing) => {
-      if (err) {
-        console.error('Error checking for existing file:', err);
-        return res.status(500).json({ error: 'Database error' });
+    // Get existing file if it exists
+    const existing = await dbAsync.get(
+      'SELECT id, pdf_content, text_content FROM pdfs WHERE filename = ?',
+      [originalname]
+    );
+
+    let result;
+    if (existing) {
+      // Update existing record
+      result = await dbAsync.run(
+        `UPDATE pdfs
+         SET pdf_content = COALESCE(?, pdf_content),
+             text_content = COALESCE(?, text_content),
+             status = 'PENDING'
+         WHERE id = ?`,
+        [shouldExtractText ? null : buffer, text_content, existing.id]
+      );
+
+      // Add to queue if text was extracted
+      if (text_content) {
+        try {
+          await documentQueue.add('process-document', {
+            documentId: existing.id,
+            filename: originalname
+          });
+        } catch (queueError) {
+          console.error('Error adding job to queue:', queueError);
+        }
       }
 
-      if (existing) {
-        // Update existing record
-        const stmt = db.prepare(`
-          UPDATE pdfs
-          SET pdf_content = COALESCE(?, pdf_content),
-              text_content = COALESCE(?, text_content),
-              status = 'PENDING'
-          WHERE id = ?
-        `);
+      res.json({
+        message: 'Document updated successfully',
+        id: existing.id,
+        filename: originalname,
+        status: 'PENDING',
+        text_content: text_content || existing.text_content
+      });
+    } else {
+      // Insert new record
+      result = await dbAsync.run(
+        `INSERT INTO pdfs (filename, pdf_content, text_content, status)
+         VALUES (?, ?, ?, 'PENDING')`,
+        [originalname, shouldExtractText ? null : buffer, text_content]
+      );
 
-        stmt.run(
-          shouldExtractText ? null : buffer,
-          text_content,
-          existing.id,
-          async function(err) {
-            if (err) {
-              console.error('Error updating record:', err);
-              return res.status(500).json({ error: 'Failed to update record' });
-            }
-
-            // Add job to queue if text content exists
-            if (text_content) {
-              try {
-                await documentQueue.add('process-document', {
-                  documentId: existing.id,
-                  filename: originalname
-                });
-              } catch (queueError) {
-                console.error('Error adding job to queue:', queueError);
-                // Continue with response even if queuing fails
-              }
-            }
-
-            res.json({
-              message: 'Document updated successfully',
-              id: existing.id,
-              filename: originalname,
-              status: 'PENDING',
-              text_content: text_content || existing.text_content
-            });
-          }
-        );
-      } else {
-        // Insert new record
-        const stmt = db.prepare(`
-          INSERT INTO pdfs (filename, pdf_content, text_content, status)
-          VALUES (?, ?, ?, 'PENDING')
-        `);
-
-        stmt.run(
-          originalname,
-          shouldExtractText ? null : buffer,
-          text_content,
-          async function(err) {
-            if (err) {
-              console.error('Error inserting record:', err);
-              return res.status(500).json({ error: 'Failed to store record' });
-            }
-
-            // Add job to queue if text content exists
-            if (text_content) {
-              try {
-                await documentQueue.add('process-document', {
-                  documentId: this.lastID,
-                  filename: originalname
-                });
-              } catch (queueError) {
-                console.error('Error adding job to queue:', queueError);
-                // Continue with response even if queuing fails
-              }
-            }
-
-            res.json({
-              message: 'Document uploaded successfully',
-              id: this.lastID,
-              filename: originalname,
-              status: 'PENDING',
-              text_content: text_content
-            });
-          }
-        );
+      // Add to queue if text was extracted
+      if (text_content) {
+        try {
+          await documentQueue.add('process-document', {
+            documentId: result.id,
+            filename: originalname
+          });
+        } catch (queueError) {
+          console.error('Error adding job to queue:', queueError);
+        }
       }
-    });
+
+      res.json({
+        message: 'Document uploaded successfully',
+        id: result.id,
+        filename: originalname,
+        status: 'PENDING',
+        text_content: text_content
+      });
+    }
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: error.message });
@@ -220,62 +164,51 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
 });
 
 // GET endpoint to fetch database schema
-app.get('/schema', (req, res) => {
-  db.all(
-    `SELECT name, type
-     FROM pragma_table_info('pdfs')`,
-    (err, rows) => {
-      if (err) {
-        console.error('Error retrieving schema:', err);
-        return res.status(500).json({ error: 'Failed to retrieve schema' });
-      }
-
-      res.json(rows);
-    }
-  );
+app.get('/schema', async (req, res) => {
+  try {
+    const rows = await dbAsync.all(`SELECT name, type FROM pragma_table_info('pdfs')`);
+    res.json(rows);
+  } catch (err) {
+    console.error('Error retrieving schema:', err);
+    res.status(500).json({ error: 'Failed to retrieve schema' });
+  }
 });
 
 // GET endpoint to list all PDFs
-app.get('/pdfs', (req, res) => {
-  db.all(
-    `SELECT
-      id,
-      filename,
-      upload_date,
-      CASE
-        WHEN pdf_content IS NOT NULL AND text_content IS NOT NULL THEN 'both'
-        WHEN pdf_content IS NOT NULL THEN 'pdf'
-        WHEN text_content IS NOT NULL THEN 'text'
-        ELSE 'none'
-      END as content_type
-     FROM pdfs
-     ORDER BY upload_date ASC`,
-    (err, rows) => {
-      if (err) {
-        console.error('Error retrieving PDFs:', err);
-        return res.status(500).json({ error: 'Failed to retrieve PDF list' });
-      }
-
-      res.json(rows);
-    }
-  );
+app.get('/pdfs', async (req, res) => {
+  try {
+    const rows = await dbAsync.all(`
+      SELECT
+        id,
+        filename,
+        upload_date,
+        CASE
+          WHEN pdf_content IS NOT NULL AND text_content IS NOT NULL THEN 'both'
+          WHEN pdf_content IS NOT NULL THEN 'pdf'
+          WHEN text_content IS NOT NULL THEN 'text'
+          ELSE 'none'
+        END as content_type
+       FROM pdfs
+       ORDER BY upload_date ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Error retrieving PDFs:', err);
+    res.status(500).json({ error: 'Failed to retrieve PDF list' });
+  }
 });
 
-// GET endpoint to retrieve PDF by ID
-app.get('/pdf/:id', (req, res) => {
-  const { id } = req.params;
+// Get PDF content by ID
+app.get('/pdf/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pdf = await dbAsync.get('SELECT * FROM pdfs WHERE id = ?', [id]);
 
-  db.get('SELECT * FROM pdfs WHERE id = ?', [id], (err, row) => {
-    if (err) {
-      console.error('Error retrieving PDF:', err);
-      return res.status(500).json({ error: 'Failed to retrieve PDF' });
-    }
-
-    if (!row) {
+    if (!pdf) {
       return res.status(404).json({ error: 'PDF not found' });
     }
 
-    if (!row.pdf_content) {
+    if (!pdf.pdf_content) {
       return res.status(404).json({
         error: 'No PDF content available for this document. It may only have text content.'
       });
@@ -283,38 +216,39 @@ app.get('/pdf/:id', (req, res) => {
 
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="${row.filename}"`,
-      'Content-Length': Buffer.byteLength(row.pdf_content)
+      'Content-Disposition': `inline; filename="${pdf.filename}"`,
+      'Content-Length': Buffer.byteLength(pdf.pdf_content)
     });
 
-    res.send(row.pdf_content);
-  });
+    res.send(pdf.pdf_content);
+  } catch (error) {
+    console.error('Error retrieving PDF:', error);
+    res.status(500).json({ error: 'Failed to retrieve PDF' });
+  }
 });
 
-// GET endpoint to retrieve text content by ID
-app.get('/text/:id', (req, res) => {
-  const { id } = req.params;
+// Get text content by ID
+app.get('/text/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pdf = await dbAsync.get('SELECT text_content FROM pdfs WHERE id = ?', [id]);
 
-  db.get('SELECT text_content FROM pdfs WHERE id = ?', [id], (err, row) => {
-    if (err) {
-      console.error('Error retrieving text:', err);
-      return res.status(500).json({ error: 'Failed to retrieve text content' });
-    }
-
-    if (!row) {
+    if (!pdf) {
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    if (!row.text_content) {
+    if (!pdf.text_content) {
       return res.status(404).json({
         error: 'No text content available for this document. It may only have PDF content.'
       });
     }
 
-    res.json({ text_content: row.text_content });
-  });
+    res.json({ text_content: pdf.text_content });
+  } catch (error) {
+    console.error('Error retrieving text:', error);
+    res.status(500).json({ error: 'Failed to retrieve text content' });
+  }
 });
-
 // Error handling middleware
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {

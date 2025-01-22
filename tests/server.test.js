@@ -1,7 +1,8 @@
 import request from 'supertest';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { app, db, server } from '../server.js';
+import { app, server } from '../server.js';
+import { db } from '../database/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
