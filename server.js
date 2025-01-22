@@ -3,7 +3,9 @@ import multer from 'multer';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { documentQueue } from './queue.js';
 import { config } from './config/config.js';
-import { db, dbAsync } from './database/db.js';
+import { db } from './database/db.js';
+import { PdfRepository } from './repositories/pdf-repository.js';
+const pdfRepository = new PdfRepository();
 
 // Disable worker for Node environment
 pdfjsLib.GlobalWorkerOptions.disableWorker = true;
@@ -54,17 +56,7 @@ app.use(express.json());
 // POST endpoint to reset database
 app.post('/reset', async (req, res) => {
   try {
-    await dbAsync.run('DROP TABLE IF EXISTS pdfs');
-    await dbAsync.run(`
-      CREATE TABLE pdfs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        filename TEXT NOT NULL,
-        pdf_content BLOB,
-        text_content TEXT,
-        status TEXT DEFAULT 'PENDING',
-        upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+		await pdfRepository.reset();
     res.json({ message: 'Database reset successfully' });
   } catch (err) {
     console.error('Error resetting database:', err);
@@ -93,21 +85,15 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
     }
 
     // Get existing file if it exists
-    const existing = await dbAsync.get(
-      'SELECT id, pdf_content, text_content FROM pdfs WHERE filename = ?',
-      [originalname]
-    );
+    const existing = await pdfRepository.findByFilename(originalname);
 
     let result;
     if (existing) {
       // Update existing record
-      result = await dbAsync.run(
-        `UPDATE pdfs
-         SET pdf_content = COALESCE(?, pdf_content),
-             text_content = COALESCE(?, text_content),
-             status = 'PENDING'
-         WHERE id = ?`,
-        [shouldExtractText ? null : buffer, text_content, existing.id]
+			result = await pdfRepository.update(
+        existing.id,
+        shouldExtractText ? null : buffer,
+        text_content
       );
 
       // Add to queue if text was extracted
@@ -131,10 +117,10 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
       });
     } else {
       // Insert new record
-      result = await dbAsync.run(
-        `INSERT INTO pdfs (filename, pdf_content, text_content, status)
-         VALUES (?, ?, ?, 'PENDING')`,
-        [originalname, shouldExtractText ? null : buffer, text_content]
+      result = await pdfRepository.create(
+        originalname,
+        shouldExtractText ? null : buffer,
+        text_content
       );
 
       // Add to queue if text was extracted
@@ -166,8 +152,8 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
 // GET endpoint to fetch database schema
 app.get('/schema', async (req, res) => {
   try {
-    const rows = await dbAsync.all(`SELECT name, type FROM pragma_table_info('pdfs')`);
-    res.json(rows);
+    const schema = await pdfRepository.getSchema();
+    res.json(schema);
   } catch (err) {
     console.error('Error retrieving schema:', err);
     res.status(500).json({ error: 'Failed to retrieve schema' });
@@ -177,21 +163,8 @@ app.get('/schema', async (req, res) => {
 // GET endpoint to list all PDFs
 app.get('/pdfs', async (req, res) => {
   try {
-    const rows = await dbAsync.all(`
-      SELECT
-        id,
-        filename,
-        upload_date,
-        CASE
-          WHEN pdf_content IS NOT NULL AND text_content IS NOT NULL THEN 'both'
-          WHEN pdf_content IS NOT NULL THEN 'pdf'
-          WHEN text_content IS NOT NULL THEN 'text'
-          ELSE 'none'
-        END as content_type
-       FROM pdfs
-       ORDER BY upload_date ASC`
-    );
-    res.json(rows);
+		const pdfs = await pdfRepository.list();
+    res.json(pdfs);
   } catch (err) {
     console.error('Error retrieving PDFs:', err);
     res.status(500).json({ error: 'Failed to retrieve PDF list' });
@@ -202,7 +175,7 @@ app.get('/pdfs', async (req, res) => {
 app.get('/pdf/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const pdf = await dbAsync.get('SELECT * FROM pdfs WHERE id = ?', [id]);
+		const pdf = await pdfRepository.getById(req.params.id);
 
     if (!pdf) {
       return res.status(404).json({ error: 'PDF not found' });
@@ -231,7 +204,7 @@ app.get('/pdf/:id', async (req, res) => {
 app.get('/text/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const pdf = await dbAsync.get('SELECT text_content FROM pdfs WHERE id = ?', [id]);
+		const pdf = await pdfRepository.getTextById(req.params.id);
 
     if (!pdf) {
       return res.status(404).json({ error: 'Document not found' });
