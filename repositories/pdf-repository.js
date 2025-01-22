@@ -61,7 +61,7 @@ export class PdfRepository {
 
   async reset() {
     await dbAsync.run('DROP TABLE IF EXISTS pdfs');
-    
+
     return await dbAsync.run(`
       CREATE TABLE pdfs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
