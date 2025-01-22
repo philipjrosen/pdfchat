@@ -1,11 +1,12 @@
 import express from 'express';
 import multer from 'multer';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { documentQueue } from './queue.js';
 import { config } from './config/config.js';
 import { db } from './database/db.js';
 import { PdfRepository } from './repositories/pdf-repository.js';
+import { PdfService } from './services/pdf-service.js';
 const pdfRepository = new PdfRepository();
+const pdfService = new PdfService(pdfRepository);
 
 // Disable worker for Node environment
 pdfjsLib.GlobalWorkerOptions.disableWorker = true;
@@ -71,78 +72,12 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
       return res.status(400).json({ error: 'No PDF file uploaded' });
     }
 
-    const { originalname, buffer } = req.file;
-    const shouldExtractText = req.query.extractText === 'true';
-    let text_content = null;
+    const result = await pdfService.processUpload(
+      req.file,
+      req.query.extractText === 'true'
+    );
 
-    if (shouldExtractText) {
-      try {
-        text_content = await extractPdfText(new Uint8Array(buffer));
-      } catch (parseError) {
-        console.error('Error parsing PDF:', parseError);
-        return res.status(400).json({ error: 'Failed to parse PDF text content' });
-      }
-    }
-
-    // Get existing file if it exists
-    const existing = await pdfRepository.findByFilename(originalname);
-
-    let result;
-    if (existing) {
-      // Update existing record
-			result = await pdfRepository.update(
-        existing.id,
-        shouldExtractText ? null : buffer,
-        text_content
-      );
-
-      // Add to queue if text was extracted
-      if (text_content) {
-        try {
-          await documentQueue.add('process-document', {
-            documentId: existing.id,
-            filename: originalname
-          });
-        } catch (queueError) {
-          console.error('Error adding job to queue:', queueError);
-        }
-      }
-
-      res.json({
-        message: 'Document updated successfully',
-        id: existing.id,
-        filename: originalname,
-        status: 'PENDING',
-        text_content: text_content || existing.text_content
-      });
-    } else {
-      // Insert new record
-      result = await pdfRepository.create(
-        originalname,
-        shouldExtractText ? null : buffer,
-        text_content
-      );
-
-      // Add to queue if text was extracted
-      if (text_content) {
-        try {
-          await documentQueue.add('process-document', {
-            documentId: result.id,
-            filename: originalname
-          });
-        } catch (queueError) {
-          console.error('Error adding job to queue:', queueError);
-        }
-      }
-
-      res.json({
-        message: 'Document uploaded successfully',
-        id: result.id,
-        filename: originalname,
-        status: 'PENDING',
-        text_content: text_content
-      });
-    }
+    res.json(result);
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: error.message });
