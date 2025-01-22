@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import sqlite3 from 'sqlite3';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { documentQueue } from './queue.js';
 
 // Disable worker for Node environment
 pdfjsLib.GlobalWorkerOptions.disableWorker = true;
@@ -59,6 +60,7 @@ const db = new sqlite3.Database('pdfs.db', (err) => {
       filename TEXT NOT NULL,
       pdf_content BLOB,
 			text_content TEXT,
+			status TEXT DEFAULT 'PENDING',
       upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -69,20 +71,19 @@ app.use(express.json());
 
 // POST endpoint to reset database
 app.post('/reset', (req, res) => {
-  // Drop the table if it exists
   db.run('DROP TABLE IF EXISTS pdfs', (err) => {
     if (err) {
       console.error('Error dropping table:', err);
       return res.status(500).json({ error: 'Failed to reset database' });
     }
 
-    // Recreate the table
     db.run(`
       CREATE TABLE pdfs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         filename TEXT NOT NULL,
         pdf_content BLOB,
-				text_content TEXT,
+        text_content TEXT,
+        status TEXT DEFAULT 'PENDING',
         upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `, (err) => {
@@ -97,6 +98,7 @@ app.post('/reset', (req, res) => {
 });
 
 // POST endpoint for uploading PDFs
+// Modified upload endpoint
 app.post('/upload', upload.single('pdf'), async (req, res) => {
   try {
     if (!req.file) {
@@ -117,7 +119,7 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
     }
 
     // Check if file already exists
-    db.get('SELECT id, pdf_content, text_content FROM pdfs WHERE filename = ?', [originalname], (err, existing) => {
+    db.get('SELECT id, pdf_content, text_content FROM pdfs WHERE filename = ?', [originalname], async (err, existing) => {
       if (err) {
         console.error('Error checking for existing file:', err);
         return res.status(500).json({ error: 'Database error' });
@@ -126,9 +128,10 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
       if (existing) {
         // Update existing record
         const stmt = db.prepare(`
-          UPDATE pdfs 
+          UPDATE pdfs
           SET pdf_content = COALESCE(?, pdf_content),
-              text_content = COALESCE(?, text_content)
+              text_content = COALESCE(?, text_content),
+              status = 'PENDING'
           WHERE id = ?
         `);
 
@@ -136,16 +139,30 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
           shouldExtractText ? null : buffer,
           text_content,
           existing.id,
-          function(err) {
+          async function(err) {
             if (err) {
               console.error('Error updating record:', err);
               return res.status(500).json({ error: 'Failed to update record' });
+            }
+
+            // Add job to queue if text content exists
+            if (text_content) {
+              try {
+                await documentQueue.add('process-document', {
+                  documentId: existing.id,
+                  filename: originalname
+                });
+              } catch (queueError) {
+                console.error('Error adding job to queue:', queueError);
+                // Continue with response even if queuing fails
+              }
             }
 
             res.json({
               message: 'Document updated successfully',
               id: existing.id,
               filename: originalname,
+              status: 'PENDING',
               text_content: text_content || existing.text_content
             });
           }
@@ -153,24 +170,38 @@ app.post('/upload', upload.single('pdf'), async (req, res) => {
       } else {
         // Insert new record
         const stmt = db.prepare(`
-          INSERT INTO pdfs (filename, pdf_content, text_content)
-          VALUES (?, ?, ?)
+          INSERT INTO pdfs (filename, pdf_content, text_content, status)
+          VALUES (?, ?, ?, 'PENDING')
         `);
 
         stmt.run(
           originalname,
           shouldExtractText ? null : buffer,
           text_content,
-          function(err) {
+          async function(err) {
             if (err) {
               console.error('Error inserting record:', err);
               return res.status(500).json({ error: 'Failed to store record' });
+            }
+
+            // Add job to queue if text content exists
+            if (text_content) {
+              try {
+                await documentQueue.add('process-document', {
+                  documentId: this.lastID,
+                  filename: originalname
+                });
+              } catch (queueError) {
+                console.error('Error adding job to queue:', queueError);
+                // Continue with response even if queuing fails
+              }
             }
 
             res.json({
               message: 'Document uploaded successfully',
               id: this.lastID,
               filename: originalname,
+              status: 'PENDING',
               text_content: text_content
             });
           }
