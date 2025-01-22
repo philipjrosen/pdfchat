@@ -2,23 +2,41 @@ import express from 'express';
 import multer from 'multer';
 import { config } from '../config/config.js';
 
-const router = express.Router();
-
-// Configure multer for PDF uploads
-const upload = multer({
-  fileFilter: (req, file, cb) => {
-    if (config.upload.allowedMimeTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only PDF files are allowed'));
-    }
-  },
-  limits: {
-    fileSize: config.upload.maxFileSize
-  }
-});
-
 export default function createRoutes(pdfService, pdfRepository) {
+  const router = express.Router();
+
+  // Configure multer for PDF uploads with error handling
+  const upload = multer({
+    fileFilter: (req, file, cb) => {
+      if (config.upload.allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        const error = new Error('Only PDF files are allowed');
+        error.code = 'INVALID_FILE_TYPE';
+        cb(error);
+      }
+    },
+    limits: {
+      fileSize: config.upload.maxFileSize
+    }
+  }).single('pdf');
+
+  // Wrap upload middleware to handle errors
+  const handleUpload = (req, res, next) => {
+    upload(req, res, (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: 'File size exceeds limit' });
+        }
+        if (err.code === 'INVALID_FILE_TYPE') {
+          return res.status(400).json({ error: err.message });
+        }
+        return res.status(400).json({ error: 'Invalid file upload' });
+      }
+      next();
+    });
+  };
+
   // Schema endpoint
   router.get('/schema', async (req, res) => {
     try {
@@ -41,8 +59,8 @@ export default function createRoutes(pdfService, pdfRepository) {
     }
   });
 
-  // Upload endpoint
-  router.post('/upload', upload.single('pdf'), async (req, res) => {
+  // Upload endpoint with proper error handling
+  router.post('/upload', handleUpload, async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No PDF file uploaded' });
@@ -83,7 +101,8 @@ export default function createRoutes(pdfService, pdfRepository) {
 
       res.send(pdf.pdf_content);
     } catch (error) {
-      next(error);
+      console.error('Error retrieving PDF:', error);
+      res.status(500).json({ error: 'Failed to retrieve PDF' });
     }
   });
 
@@ -93,7 +112,8 @@ export default function createRoutes(pdfService, pdfRepository) {
       const pdfs = await pdfRepository.list();
       res.json(pdfs);
     } catch (error) {
-      next(error);
+      console.error('Error retrieving PDFs:', error);
+      res.status(500).json({ error: 'Failed to retrieve PDF list' });
     }
   });
 
@@ -114,7 +134,8 @@ export default function createRoutes(pdfService, pdfRepository) {
 
       res.json({ text_content: pdf.text_content });
     } catch (error) {
-      next(error);
+      console.error('Error retrieving text:', error);
+      res.status(500).json({ error: 'Failed to retrieve text content' });
     }
   });
 

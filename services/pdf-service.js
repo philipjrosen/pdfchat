@@ -70,7 +70,7 @@ export class PdfService {
       id: result.id || existing.id,
       filename: originalname,
       status: 'PENDING',
-      text_content: textContent
+      text_content: textContent || (existing ? existing.text_content : null)
     };
   }
 }

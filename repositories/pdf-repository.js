@@ -59,18 +59,21 @@ export class PdfRepository {
     );
   }
 
+  // In pdfRepository.js
   async reset() {
-    await dbAsync.run('DROP TABLE IF EXISTS pdfs');
-
-    return await dbAsync.run(`
-      CREATE TABLE pdfs (
+    // Create table if it doesn't exist
+    await dbAsync.run(`
+      CREATE TABLE IF NOT EXISTS pdfs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         filename TEXT NOT NULL,
+        status TEXT NOT NULL,
         pdf_content BLOB,
         text_content TEXT,
-        status TEXT DEFAULT 'PENDING',
-        upload_date DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
     `);
+
+    // Clear existing data
+    await dbAsync.run('DELETE FROM pdfs;');
   }
 }
