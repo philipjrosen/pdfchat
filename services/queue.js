@@ -1,15 +1,23 @@
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
+import { config } from '../config/config.js';
 
 // Redis connection
 const connection = new Redis({
-  host: 'localhost',
-  port: 6379
+  host: config.redis.host,
+  port: config.redis.port
 });
 
 // Create document processing queue
 export const documentQueue = new Queue('document-processing', {
-  connection
+  connection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 1000
+    }
+  }
 });
 
 // Clean up connection when server shuts down

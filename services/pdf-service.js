@@ -1,5 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { documentQueue } from '../queue.js';
+import { documentQueue } from '../services/queue.js';
 
 // Configure PDF.js
 pdfjsLib.GlobalWorkerOptions.disableWorker = true;
