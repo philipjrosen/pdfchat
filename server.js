@@ -10,7 +10,7 @@ pdfjsLib.GlobalWorkerOptions.disableWorker = true;
 // Configure font data path
 pdfjsLib.GlobalWorkerOptions.standardFontDataUrl = `node_modules/pdfjs-dist/standard_fonts/`;
 
-const app = express();
+export const app = express();
 const port = 3000;
 
 // Configure multer for PDF uploads
@@ -46,12 +46,14 @@ async function extractPdfText(buffer) {
 }
 
 // Initialize SQLite database
-const db = new sqlite3.Database('pdfs.db', (err) => {
+export const db = new sqlite3.Database('pdfs.db', (err) => {
   if (err) {
     console.error('Error opening database:', err);
     return;
   }
-  console.log('Connected to SQLite database');
+  if (process.env.NODE_ENV !== 'test') {
+    console.log('Connected to SQLite database');
+  }
 
   // Create pdfs table if it doesn't exist
   db.run(`
@@ -324,9 +326,12 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
-});
+export let server
+if (process.env.NODE_ENV !== 'test') {
+  server = app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+  });
+}
 
 // Clean up database connection on server shutdown
 process.on('SIGINT', () => {
