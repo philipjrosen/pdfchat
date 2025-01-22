@@ -3,27 +3,30 @@ import multer from 'multer';
 import sqlite3 from 'sqlite3';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { documentQueue } from './queue.js';
+import { config } from './config/config.js';
 
 // Disable worker for Node environment
 pdfjsLib.GlobalWorkerOptions.disableWorker = true;
 
 // Configure font data path
-pdfjsLib.GlobalWorkerOptions.standardFontDataUrl = `node_modules/pdfjs-dist/standard_fonts/`;
+pdfjsLib.GlobalWorkerOptions.standardFontDataUrl = config.pdf.standardFontDataUrl;
+
 
 export const app = express();
-const port = 3000;
+const port = config.port;
+
 
 // Configure multer for PDF uploads
 const upload = multer({
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
+    if (config.upload.allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
       cb(new Error('Only PDF files are allowed'));
     }
   },
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: config.upload.maxFileSize // 5MB limit
   }
 });
 
@@ -46,7 +49,7 @@ async function extractPdfText(buffer) {
 }
 
 // Initialize SQLite database
-export const db = new sqlite3.Database('pdfs.db', (err) => {
+export const db = new sqlite3.Database(config.database.filename, (err) => {
   if (err) {
     console.error('Error opening database:', err);
     return;
