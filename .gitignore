@@ -1,3 +1,25 @@
 node_modules
 pdfs.db
 test.db
+
+# Python virtual environment
+python_service/venv/
+
+# Python cache files
+python_service/__pycache__/
+python_service/*.pyc
+python_service/*.pyo
+python_service/*.pyd
+
+# pytest cache
+python_service/.pytest_cache/
+
+# Model cache (sentence-transformers downloads models here)
+python_service/models/
+
+# Environment variables
+python_service/.env
+
+# IDE specific files (optional, but recommended)
+python_service/.vscode/
+python_service/.idea/
