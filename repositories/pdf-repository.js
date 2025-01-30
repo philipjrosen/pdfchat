@@ -17,7 +17,7 @@ export class PdfRepository {
 
   async update(id, pdfContent, textContent) {
     return await dbAsync.run(
-      `UPDATE pdfs 
+      `UPDATE pdfs
        SET pdf_content = COALESCE(?, pdf_content),
            text_content = COALESCE(?, text_content),
            status = 'PENDING'
@@ -31,7 +31,10 @@ export class PdfRepository {
   }
 
   async getTextById(id) {
-    return await dbAsync.get('SELECT text_content FROM pdfs WHERE id = ?', [id]);
+    return await dbAsync.get(
+      'SELECT id, text_content, status FROM pdfs WHERE id = ?',
+      [id]
+    );
   }
 
   async list() {
@@ -75,5 +78,12 @@ export class PdfRepository {
 
     // Clear existing data
     await dbAsync.run('DELETE FROM pdfs;');
+  }
+
+  async updateStatus(id, status) {
+    return await dbAsync.run(
+      'UPDATE pdfs SET status = ? WHERE id = ?',
+      [status, id]
+    );
   }
 }
