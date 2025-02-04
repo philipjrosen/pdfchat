@@ -8,10 +8,31 @@ import { worker } from '../services/worker.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * Waits for the queue to become idle by checking active and waiting jobs.
+ */
+async function waitForQueueToBeIdle(queue) {
+  let isIdle = false;
+  while (!isIdle) {
+    const active = await queue.getActive();
+    const waiting = await queue.getWaiting();
+    if (active.length === 0 && waiting.length === 0 && !queue.paused) {
+      isIdle = true;
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+}
+
 describe('PDF Routes', () => {
   beforeEach(async () => {
     // Reset database before each test
     await request(app).post('/reset');
+    // Clean the queue to ensure no leftover jobs
+    await documentQueue.clean(0, 'completed');
+    await documentQueue.clean(0, 'failed');
+    await documentQueue.clean(0, 'waiting');
+    await documentQueue.clean(0, 'active');
   });
 
   // Add afterAll to clean up connections
@@ -62,6 +83,9 @@ describe('PDF Routes', () => {
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('id');
       expect(response.body.status).toBe('PENDING');
+
+      // Wait for the queue to process the upload
+      await waitForQueueToBeIdle(documentQueue);
     });
 
     it('should extract text when requested', async () => {
@@ -72,6 +96,9 @@ describe('PDF Routes', () => {
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('text_content');
       expect(response.body.text_content).toBeTruthy();
+
+      // Wait for the queue to process the upload
+      await waitForQueueToBeIdle(documentQueue);
     });
   });
 
@@ -81,6 +108,9 @@ describe('PDF Routes', () => {
       await request(app)
         .post('/upload')
         .attach('pdf', path.join(__dirname, 'fixtures/test.pdf'));
+
+      // Wait for the queue to process the upload
+      await waitForQueueToBeIdle(documentQueue);
 
       const response = await request(app).get('/pdfs');
 
@@ -120,6 +150,9 @@ describe('PDF Routes', () => {
       const uploadResponse = await request(app)
         .post('/upload?extractText=true')
         .attach('pdf', path.join(__dirname, 'fixtures/test.pdf'));
+
+      // Wait for the queue to process the upload
+      await waitForQueueToBeIdle(documentQueue);
 
       const response = await request(app).get(`/text/${uploadResponse.body.id}`);
 
