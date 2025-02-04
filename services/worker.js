@@ -1,9 +1,12 @@
 import { Worker } from 'bullmq';
 import { connection } from './queue.js';
 import { PdfRepository } from '../repositories/pdf-repository.js';
+import { PineconeService } from './pinecone-service.js';
+
 
 const FLASK_SERVICE_URL = 'http://localhost:8000';
 const pdfRepository = new PdfRepository();
+const pineconeService = new PineconeService();
 
 // Test-aware loggers that maintain console.log vs console.error
 const log = {
@@ -52,7 +55,17 @@ export const worker = new Worker('document-processing', async (job) => {
 
     // Generate embeddings
     const embeddings = await generateEmbeddings(text);
-    log.info(`Generated embeddings for document ${documentId}`);
+    log.info(`Generated embeddings for document ${documentId} (length: ${embeddings.length})`);
+
+    // Store embeddings in Pinecone
+    try {
+      const pineconeId = documentId.toString(); // Ensure ID is a string
+      await pineconeService.upsert(pineconeId, embeddings);
+      log.info(`Successfully stored embeddings in Pinecone for document ${pineconeId}`);
+    } catch (error) {
+      log.error('Pinecone upsert error:', error);
+      throw error;
+    }
 
     // Update status to COMPLETED
     await pdfRepository.updateStatus(documentId, 'COMPLETED');

@@ -1,6 +1,7 @@
 node_modules
 pdfs.db
 test.db
+.env
 
 # Python virtual environment
 python_service/venv/

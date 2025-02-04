@@ -6,6 +6,12 @@ import createRoutes from './routes/routes.js';
 import './services/queue.js';  // Import for side effects (queue setup)
 import { worker } from './services/worker.js';  // Import the worker
 
+// Debug log raw environment variables
+console.log('Raw Environment Variables:', {
+  PINECONE_API_KEY: process.env.PINECONE_API_KEY ? 'Set' : 'Not Set',
+  PINECONE_INDEX_NAME: process.env.PINECONE_INDEX_NAME || 'Not Set'
+});
+
 export const app = express();
 
 // Initialize repositories and services

@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import { config } from '../config/config.js';
 import { documentQueue } from '../services/queue.js';
+import { PineconeService } from '../services/pinecone-service.js';
 
 export default function createRoutes(pdfService, pdfRepository) {
   const router = express.Router();
@@ -175,6 +176,26 @@ export default function createRoutes(pdfService, pdfRepository) {
     try {
       await documentQueue.obliterate();
       res.json({ message: 'Queue reset' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/pinecone/stats', async (req, res) => {
+    try {
+      const pineconeService = new PineconeService();
+      const stats = await pineconeService.describeIndex();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.delete('/pinecone/delete-all', async (req, res) => {
+    try {
+      const pineconeService = new PineconeService();
+      await pineconeService.deleteAll();
+      res.json({ message: 'All vectors deleted successfully' });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
