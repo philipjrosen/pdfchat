@@ -15,14 +15,14 @@ export class PdfRepository {
     );
   }
 
-  async update(id, pdfContent, textContent) {
+  async update(id, pdfContent, textContent, status = 'PENDING') {
     return await dbAsync.run(
       `UPDATE pdfs
        SET pdf_content = COALESCE(?, pdf_content),
            text_content = COALESCE(?, text_content),
-           status = 'PENDING'
+           status = ?
        WHERE id = ?`,
-      [pdfContent, textContent, id]
+      [pdfContent, textContent, status, id]
     );
   }
 

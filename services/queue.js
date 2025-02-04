@@ -3,9 +3,10 @@ import Redis from 'ioredis';
 import { config } from '../config/config.js';
 
 // Redis connection
-const connection = new Redis({
+export const connection = new Redis({
   host: config.redis.host,
-  port: config.redis.port
+  port: config.redis.port,
+  maxRetriesPerRequest: null
 });
 
 // Create document processing queue

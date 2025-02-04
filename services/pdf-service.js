@@ -59,7 +59,8 @@ export class PdfService {
       try {
         await documentQueue.add('process-document', {
           documentId: result.id || existing.id,
-          filename: originalname
+          filename: originalname,
+          text: textContent  // Include extracted text in job data
         });
       } catch (queueError) {
         console.error('Error adding job to queue:', queueError);

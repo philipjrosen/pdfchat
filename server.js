@@ -4,6 +4,7 @@ import { PdfRepository } from './repositories/pdf-repository.js';
 import { PdfService } from './services/pdf-service.js';
 import createRoutes from './routes/routes.js';
 import './services/queue.js';  // Import for side effects (queue setup)
+import { worker } from './services/worker.js';  // Import the worker
 
 export const app = express();
 
@@ -31,8 +32,9 @@ if (process.env.NODE_ENV !== 'test') {
   });
 
   // Handle graceful shutdown
-  process.on('SIGINT', () => {
+  process.on('SIGINT', async () => {
     console.log('Shutting down server...');
+    await worker.close();  // Close worker
     server.close(() => {
       console.log('Server successfully shut down');
       process.exit(0);

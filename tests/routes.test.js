@@ -1,7 +1,9 @@
 import request from 'supertest';
-import { app } from '../server.js';
+import { app, server } from '../server.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { documentQueue, connection } from '../services/queue.js';
+import { worker } from '../services/worker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,6 +12,28 @@ describe('PDF Routes', () => {
   beforeEach(async () => {
     // Reset database before each test
     await request(app).post('/reset');
+  });
+
+  // Add afterAll to clean up connections
+  afterAll(async () => {
+    // Close worker and queue
+    await worker.close();
+    await documentQueue.close();
+
+    // Close Redis connection
+    await connection.quit();
+
+    // Close Express server
+    await new Promise((resolve) => {
+      if (server) {
+        server.close(resolve);
+      } else {
+        resolve();
+      }
+    });
+
+    // Add a small delay to ensure all connections are closed
+    await new Promise(resolve => setTimeout(resolve, 100));
   });
 
   describe('Upload Endpoint', () => {

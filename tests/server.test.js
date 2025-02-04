@@ -13,12 +13,16 @@ describe('PDF Upload API', () => {
     await request(app).post('/reset');
   });
 
-  afterAll(done => {
-    db.close(() => {
+  afterAll(async () => {
+    // Close database connection
+    await new Promise(resolve => db.close(resolve));
+
+    // Close Express server
+    await new Promise((resolve) => {
       if (server) {
-        server.close(done);
+        server.close(resolve);
       } else {
-        done();
+        resolve();
       }
     });
   });

@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import { config } from '../config/config.js';
+import { documentQueue } from '../services/queue.js';
 
 export default function createRoutes(pdfService, pdfRepository) {
   const router = express.Router();
@@ -136,6 +137,46 @@ export default function createRoutes(pdfService, pdfRepository) {
     } catch (error) {
       console.error('Error retrieving text:', error);
       res.status(500).json({ error: 'Failed to retrieve text content' });
+    }
+  });
+
+  // Add these routes
+  router.get('/queue/jobs', async (req, res) => {
+    try {
+      const waiting = await documentQueue.getWaiting();
+      const active = await documentQueue.getActive();
+      const completed = await documentQueue.getCompleted();
+      const failed = await documentQueue.getFailed();
+
+      res.json({
+        waiting: waiting.length,
+        active: active.length,
+        completed: completed.length,
+        failed: failed.length
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.post('/queue/clean', async (req, res) => {
+    try {
+      await documentQueue.clean(0, 'completed');
+      await documentQueue.clean(0, 'failed');
+      await documentQueue.clean(0, 'wait');
+      await documentQueue.clean(0, 'active');
+      res.json({ message: 'Queue cleaned' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.post('/queue/reset', async (req, res) => {
+    try {
+      await documentQueue.obliterate();
+      res.json({ message: 'Queue reset' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
   });
 
