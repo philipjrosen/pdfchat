@@ -37,10 +37,18 @@ async function generateEmbeddings(text) {
     }
 
     const data = await response.json();
-    return data.embeddings;
+
+    if (!data.chunks || !Array.isArray(data.chunks)) {
+      throw new Error('No chunks found in response');
+    }
+
+    return data.chunks;
   } catch (error) {
     log.error('Error generating embeddings:', error.message);
-    throw new Error('Failed to generate embeddings');
+    if (error.response) {
+      log.error('Response:', await error.response.text());
+    }
+    throw new Error(`Failed to generate embeddings: ${error.message}`);
   }
 }
 
@@ -54,14 +62,24 @@ export const worker = new Worker('document-processing', async (job) => {
     }
 
     // Generate embeddings
-    const embeddings = await generateEmbeddings(text);
-    log.info(`Generated embeddings for document ${documentId} (length: ${embeddings.length})`);
+    const chunks = await generateEmbeddings(text);
+    log.info(`Generated ${chunks.length} chunks for document ${documentId}`);
 
     // Store embeddings in Pinecone
     try {
-      const pineconeId = documentId.toString(); // Ensure ID is a string
-      await pineconeService.upsert(pineconeId, embeddings);
-      log.info(`Successfully stored embeddings in Pinecone for document ${pineconeId}`);
+      const pineconeId = documentId.toString();
+      // Create vectors with metadata for each chunk
+      const vectors = chunks.map(chunk => ({
+        id: `${pineconeId}_${chunk.chunk_index}`,
+        values: chunk.embedding,
+        metadata: {
+          text: chunk.text,
+          document_id: pineconeId
+        }
+      }));
+
+      await pineconeService.upsert(vectors);
+      log.info(`Successfully stored ${vectors.length} chunks in Pinecone for document ${pineconeId}`);
     } catch (error) {
       log.error('Pinecone upsert error:', error);
       throw error;
@@ -70,7 +88,7 @@ export const worker = new Worker('document-processing', async (job) => {
     // Update status to COMPLETED
     await pdfRepository.updateStatus(documentId, 'COMPLETED');
 
-    return { success: true, documentId, embeddings };
+    return { success: true, documentId };
   } catch (error) {
     // Update status to FAILED on error
     await pdfRepository.updateStatus(documentId, 'FAILED');

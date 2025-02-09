@@ -20,21 +20,17 @@ export class PineconeService {
     this.index = this.pinecone.index(config.pinecone.indexName);
   }
 
-  async upsert(documentId, embeddings) {
+  async upsert(vectors) {
     try {
-      console.log(`PineconeService: Upserting document ${documentId}`);
-      await this.index.upsert([{
-        id: documentId,
-        values: embeddings,
-        metadata: {
-          documentId: documentId
-        }
-      }]);
-      console.log(`PineconeService: Successfully upserted document ${documentId}`);
+      console.log(`PineconeService: Upserting ${vectors.length} vectors`);
+
+      await this.index.upsert(vectors);
+
+      console.log(`PineconeService: Successfully upserted ${vectors.length} vectors`);
       return true;
     } catch (error) {
       console.error('Pinecone upsert error:', error);
-      throw new Error('Failed to store embeddings in Pinecone');
+      throw new Error('Failed to store vectors in Pinecone');
     }
   }
 

@@ -13,7 +13,7 @@ logger.info("Loading model...")
 model = SentenceTransformer('all-MiniLM-L6-v2')
 logger.info("Model loaded successfully")
 
-def get_document_embedding(text: str, model, chunk_size: int = 256, overlap: int = 20) -> np.ndarray:
+def get_document_embeddings(text: str, model, chunk_size: int = 256, overlap: int = 20) -> list:
     # Split text into overlapping chunks
     tokens = model.tokenizer.tokenize(text)
     chunks = []
@@ -24,29 +24,24 @@ def get_document_embedding(text: str, model, chunk_size: int = 256, overlap: int
     for i in range(0, len(tokens), chunk_size - overlap):
         chunk = tokens[i:i + chunk_size]
         chunk_text = model.tokenizer.convert_tokens_to_string(chunk)
-        chunks.append(chunk_text)
+        chunks.append({"text": chunk_text, "chunk_index": i // (chunk_size - overlap)})
 
     # Log chunk information
     logger.info("Document split into %d chunks", len(chunks))
 
     # Get embeddings for all chunks
-    chunk_embeddings = model.encode(chunks)
+    chunk_embeddings = model.encode([chunk["text"] for chunk in chunks])
 
-    # Log embeddings information
-    logger.info("Chunk embeddings shape: %s", chunk_embeddings.shape)
+    # Prepare chunks with their embeddings
+    chunk_data = []
+    for i, (chunk, embedding) in enumerate(zip(chunks, chunk_embeddings)):
+        chunk_data.append({
+            "text": chunk["text"],
+            "chunk_index": chunk["chunk_index"],
+            "embedding": embedding
+        })
 
-    # Average the embeddings
-    document_embedding = np.mean(chunk_embeddings, axis=0)
-
-    # Log final embedding
-    logger.info("Final embedding shape: %s", document_embedding.shape)
-    logger.info("Embedding values summary - Mean: %.4f, Min: %.4f, Max: %.4f",
-               document_embedding.mean(), document_embedding.min(), document_embedding.max())
-
-    # For detailed inspection (be careful with large embeddings)
-    # logger.debug(f"Full embedding: {document_embedding.tolist()}")
-
-    return document_embedding
+    return chunk_data
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -62,17 +57,21 @@ def embed_text():
         return jsonify({"error": "Content-Type must be application/json"}), 400
 
     data = request.get_json()
-    logger.info("Received data: %s", data)
+    logger.info("Received text: %.100s%s", data['text'], "..." if len(data['text']) > 100 else "")
 
     if 'text' not in data:
         logger.error("Missing 'text' field")
         return jsonify({"error": "Missing 'text' field"}), 400
 
     try:
-        embeddings = get_document_embedding(data['text'], model)
-        logger.info("Generated embeddings of shape: %s", embeddings.shape)
+        chunk_data = get_document_embeddings(data['text'], model)
+        logger.info("Generated embeddings for %d chunks", len(chunk_data))
         return jsonify({
-            "embeddings": embeddings.tolist()
+            "chunks": [{
+                "text": chunk["text"],
+                "chunk_index": chunk["chunk_index"],
+                "embedding": chunk["embedding"].tolist()
+            } for chunk in chunk_data]
         })
     except Exception as e:
         logger.error(f"Error generating embeddings: {str(e)}")
