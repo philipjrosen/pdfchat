@@ -58,4 +58,21 @@ export class PineconeService {
       throw new Error('Failed to delete vectors from Pinecone');
     }
   }
+
+  async queryEmbeddings(embedding, documentId, topK = 3) {
+    try {
+      console.log(`PineconeService: Querying for document ${documentId}`);
+      const response = await this.index.query({
+        vector: embedding,
+        filter: { document_id: documentId },
+        topK,
+        includeMetadata: true
+      });
+      console.log(`PineconeService: Found ${response.matches.length} matches`);
+      return response.matches;
+    } catch (error) {
+      console.error('Pinecone query error:', error);
+      throw new Error('Failed to query vectors from Pinecone');
+    }
+  }
 }
