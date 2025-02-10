@@ -77,6 +77,31 @@ def embed_text():
         logger.error(f"Error generating embeddings: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/embed-text', methods=['POST'])
+def embed_single_text():
+    logger.info("Embed single text endpoint called")
+
+    if not request.is_json:
+        logger.error("Request is not JSON")
+        return jsonify({"error": "Content-Type must be application/json"}), 400
+
+    data = request.get_json()
+
+    if 'text' not in data:
+        logger.error("Missing 'text' field")
+        return jsonify({"error": "Missing 'text' field"}), 400
+
+    try:
+        # Get embedding directly without chunking
+        embedding = model.encode(data['text'])
+
+        return jsonify({
+            "embedding": embedding.tolist()
+        })
+    except Exception as e:
+        logger.error(f"Error generating embedding: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     logger.info("Starting Flask server...")
     app.run(port=8000, debug=True) 
