@@ -25,5 +25,8 @@ export const config = {
     pinecone: {
       apiKey: process.env.PINECONE_API_KEY,
       indexName: process.env.PINECONE_INDEX_NAME
+    },
+    openai: {
+      apiKey: process.env.OPENAI_API_KEY
     }
   };
