@@ -16,5 +16,10 @@ def test_embed_text(client):
     response = client.post('/embed', 
                          json={'text': 'This is a test.'})
     assert response.status_code == 200
-    assert 'embeddings' in response.json
-    assert len(response.json['embeddings']) == 384  # Verify dimension 
+    assert 'chunks' in response.json
+    assert len(response.json['chunks']) > 0
+    assert 'embedding' in response.json['chunks'][0]
+    assert 'text' in response.json['chunks'][0]
+    assert 'chunk_index' in response.json['chunks'][0]
+    # Verify embedding dimension for each chunk
+    assert len(response.json['chunks'][0]['embedding']) == 384 
