@@ -3,9 +3,11 @@ import multer from 'multer';
 import { config } from '../config/config.js';
 import { documentQueue } from '../services/queue.js';
 import { PineconeService } from '../services/pinecone-service.js';
+import { QuestionService } from '../services/question-service.js';
 
-export default function createRoutes(pdfService, pdfRepository) {
+export default function createRoutes(pdfService, pdfRepository, questionServiceOverride) {
   const router = express.Router();
+  const questionService = questionServiceOverride || new QuestionService();
 
   // Configure multer for PDF uploads with error handling
   const upload = multer({
@@ -39,14 +41,18 @@ export default function createRoutes(pdfService, pdfRepository) {
     });
   };
 
+  const handleError = (res, error, message) => {
+    console.error(message, error);
+    res.status(500).json({ error: error.message });
+  };
+
   // Schema endpoint
   router.get('/schema', async (req, res) => {
     try {
       const schema = await pdfRepository.getSchema();
       res.json(schema);
     } catch (err) {
-      console.error('Error retrieving schema:', err);
-      res.status(500).json({ error: 'Failed to retrieve schema' });
+      handleError(res, err, 'Error retrieving schema:');
     }
   });
 
@@ -56,8 +62,7 @@ export default function createRoutes(pdfService, pdfRepository) {
       await pdfRepository.reset();
       res.json({ message: 'Database reset successfully' });
     } catch (err) {
-      console.error('Error resetting database:', err);
-      res.status(500).json({ error: 'Failed to reset database' });
+      handleError(res, err, 'Error resetting database:');
     }
   });
 
@@ -75,8 +80,7 @@ export default function createRoutes(pdfService, pdfRepository) {
 
       res.json(result);
     } catch (error) {
-      console.error('Upload error:', error);
-      res.status(500).json({ error: error.message });
+      handleError(res, error, 'Upload error:');
     }
   });
 
@@ -103,8 +107,7 @@ export default function createRoutes(pdfService, pdfRepository) {
 
       res.send(pdf.pdf_content);
     } catch (error) {
-      console.error('Error retrieving PDF:', error);
-      res.status(500).json({ error: 'Failed to retrieve PDF' });
+      handleError(res, error, 'Error retrieving PDF:');
     }
   });
 
@@ -114,8 +117,7 @@ export default function createRoutes(pdfService, pdfRepository) {
       const pdfs = await pdfRepository.list();
       res.json(pdfs);
     } catch (error) {
-      console.error('Error retrieving PDFs:', error);
-      res.status(500).json({ error: 'Failed to retrieve PDF list' });
+      handleError(res, error, 'Error retrieving PDFs:');
     }
   });
 
@@ -136,8 +138,7 @@ export default function createRoutes(pdfService, pdfRepository) {
 
       res.json({ text_content: pdf.text_content });
     } catch (error) {
-      console.error('Error retrieving text:', error);
-      res.status(500).json({ error: 'Failed to retrieve text content' });
+      handleError(res, error, 'Error retrieving text:');
     }
   });
 
@@ -156,7 +157,7 @@ export default function createRoutes(pdfService, pdfRepository) {
         failed: failed.length
       });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      handleError(res, error, 'Error retrieving queue jobs:');
     }
   });
 
@@ -168,7 +169,7 @@ export default function createRoutes(pdfService, pdfRepository) {
       await documentQueue.clean(0, 'active');
       res.json({ message: 'Queue cleaned' });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      handleError(res, error, 'Error cleaning queue:');
     }
   });
 
@@ -177,7 +178,7 @@ export default function createRoutes(pdfService, pdfRepository) {
       await documentQueue.obliterate();
       res.json({ message: 'Queue reset' });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      handleError(res, error, 'Error resetting queue:');
     }
   });
 
@@ -187,7 +188,7 @@ export default function createRoutes(pdfService, pdfRepository) {
       const stats = await pineconeService.describeIndex();
       res.json(stats);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      handleError(res, error, 'Error retrieving Pinecone stats:');
     }
   });
 
@@ -197,7 +198,23 @@ export default function createRoutes(pdfService, pdfRepository) {
       await pineconeService.deleteAll();
       res.json({ message: 'All vectors deleted successfully' });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      handleError(res, error, 'Error deleting all vectors:');
+    }
+  });
+
+  router.post('/ask/:documentId', async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      const { question } = req.body;
+
+      if (!question) {
+        return res.status(400).json({ error: 'Question is required' });
+      }
+
+      const answer = await questionService.getAnswer(documentId, question);
+      res.json({ answer });
+    } catch (error) {
+      handleError(res, error, 'Error processing question:');
     }
   });
 

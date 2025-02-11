@@ -1,9 +1,14 @@
+import { jest } from '@jest/globals';
 import request from 'supertest';
 import { app, server } from '../server.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { documentQueue, connection } from '../services/queue.js';
 import { worker } from '../services/worker.js';
+import createRoutes from '../routes/routes.js';
+import express from 'express';
+import { PdfService } from '../services/pdf-service.js';
+import { PdfRepository } from '../repositories/pdf-repository.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,6 +28,14 @@ async function waitForQueueToBeIdle(queue) {
     }
   }
 }
+
+// Create a mock getAnswer function
+const mockGetAnswer = jest.fn();
+
+// Mock the QuestionService
+const mockQuestionService = {
+  getAnswer: mockGetAnswer
+};
 
 describe('PDF Routes', () => {
   beforeEach(async () => {
@@ -159,6 +172,88 @@ describe('PDF Routes', () => {
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('text_content');
       expect(response.body.text_content).toBeTruthy();
+    });
+  });
+
+  describe('Ask Endpoint', () => {
+    let app;
+
+    beforeEach(async () => {
+      // Create a fresh Express app for each test
+      app = express();
+      app.use(express.json());
+
+      // Create mock services
+      const mockPdfService = new PdfService(new PdfRepository());
+      const mockPdfRepository = new PdfRepository();
+
+      // Create routes with mocked services
+      const routes = createRoutes(mockPdfService, mockPdfRepository, mockQuestionService);
+      app.use(routes);
+
+      // Clear all mocks
+      jest.clearAllMocks();
+    });
+
+    it('should return answer for valid question', async () => {
+      const documentId = '123';
+      const question = 'What is the capital of France?';
+      const expectedAnswer = 'Paris is the capital of France.';
+
+      mockGetAnswer.mockResolvedValue(expectedAnswer);
+
+      const response = await request(app)
+        .post(`/ask/${documentId}`)
+        .send({ question });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ answer: expectedAnswer });
+      expect(mockGetAnswer).toHaveBeenCalledWith(documentId, question);
+    });
+
+    it('should return 400 if question is missing', async () => {
+      const documentId = '123';
+
+      const response = await request(app)
+        .post(`/ask/${documentId}`)
+        .send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'Question is required' });
+      expect(mockGetAnswer).not.toHaveBeenCalled();
+    });
+
+    it('should return 500 if question service fails', async () => {
+      const documentId = '123';
+      const question = 'What is the capital of France?';
+      const error = new Error('Service error');
+
+      mockGetAnswer.mockRejectedValue(error);
+
+      const response = await request(app)
+        .post(`/ask/${documentId}`)
+        .send({ question });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({ error: error.message });
+    });
+
+    it('should handle non-existent document', async () => {
+      const documentId = '999';
+      const question = 'What is the capital of France?';
+
+      mockGetAnswer.mockResolvedValue(
+        'No relevant content found in the document to answer this question.'
+      );
+
+      const response = await request(app)
+        .post(`/ask/${documentId}`)
+        .send({ question });
+
+      expect(response.status).toBe(200);
+      expect(response.body.answer).toBe(
+        'No relevant content found in the document to answer this question.'
+      );
     });
   });
 });
