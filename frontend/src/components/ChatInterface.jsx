@@ -14,6 +14,7 @@ const ChatHistory = styled.div`
   padding: 1rem;
   margin-bottom: 1rem;
   overflow-y: auto;
+  font-size: 16px;
 `;
 
 const MessageInput = styled.textarea`
@@ -25,6 +26,7 @@ const MessageInput = styled.textarea`
   height: 100px;
   resize: none;
   margin-bottom: 1rem;
+  font-size: 16px;
 `;
 
 const SendButton = styled.button`
