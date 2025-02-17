@@ -5,6 +5,7 @@ import { PdfService } from './services/pdf-service.js';
 import createRoutes from './routes/routes.js';
 import './services/queue.js';  // Import for side effects (queue setup)
 import { worker } from './services/worker.js';  // Import the worker
+import cors from 'cors';
 
 // Debug log raw environment variables
 console.log('Raw Environment Variables:', {
@@ -20,6 +21,12 @@ const pdfService = new PdfService(pdfRepository);
 
 // Middleware
 app.use(express.json());
+app.use(cors({
+  origin: 'http://localhost:5173', // Your React app's URL
+  methods: ['GET', 'POST', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
 // Routes
 app.use('/', createRoutes(pdfService, pdfRepository));
