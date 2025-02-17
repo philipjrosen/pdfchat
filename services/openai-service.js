@@ -13,7 +13,7 @@ export class OpenAIService {
   }
 
   async generateResponse(question, context) {
-    const prompt = `Answer the following question based on the provided context.
+    const prompt = `Answer the following question based on the provided context. Do not user your own knowledge to answer the question.
     If you cannot answer this question based on the context, say "I cannot answer this based on the available information."
 
     Context: ${context}
