@@ -1,6 +1,6 @@
 // tests/pdf-repository.test.js
 import { PdfRepository } from '../repositories/pdf-repository.js';
-import { db } from '../database/db.js';
+import { dbAsync } from '../database/db.js';
 
 describe('PdfRepository', () => {
   let repository;
@@ -10,9 +10,10 @@ describe('PdfRepository', () => {
     await repository.reset();  // Clear database before each test
   });
 
-  afterAll(done => {
-    db.close(done);
-  });
+  afterAll(async () => {
+    // Close database connection
+    await dbAsync.close();
+  }, 10000); // Increase timeout to 10 seconds if needed
 
   it('should create a new PDF record', async () => {
     const result = await repository.create(

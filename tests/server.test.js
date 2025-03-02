@@ -2,7 +2,7 @@ import request from 'supertest';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { app, server } from '../server.js';
-import { db } from '../database/db.js';
+import { dbAsync } from '../database/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,7 +15,7 @@ describe('PDF Upload API', () => {
 
   afterAll(async () => {
     // Close database connection
-    await new Promise(resolve => db.close(resolve));
+    await dbAsync.close();
 
     // Close Express server
     await new Promise((resolve) => {
@@ -25,7 +25,7 @@ describe('PDF Upload API', () => {
         resolve();
       }
     });
-  });
+  }, 10000);
 
   describe('POST /upload', () => {
     it('should upload a PDF file and store it', async () => {
