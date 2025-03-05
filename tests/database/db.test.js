@@ -39,7 +39,7 @@ describe('Database Schema', () => {
     const columnNames = tableInfo.map(col => col.name);
     expect(columnNames).toEqual(
       expect.arrayContaining([
-        'id', 'corpus_id', 'filename', 'pdf_content',
+        'id', 'corpus_id', 'filename',
         'text_content', 'status', 'upload_date'
       ])
     );

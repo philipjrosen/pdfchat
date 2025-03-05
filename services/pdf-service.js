@@ -8,8 +8,8 @@ pdfjsLib.GlobalWorkerOptions.disableWorker = true;
 pdfjsLib.GlobalWorkerOptions.standardFontDataUrl = `node_modules/pdfjs-dist/standard_fonts/`;
 
 export class PdfService {
-  constructor(pdfRepository) {
-    this.pdfRepository = pdfRepository;
+  constructor(repository) {
+    this.repository = repository;
   }
 
   async extractText(buffer) {
@@ -30,7 +30,7 @@ export class PdfService {
     }
   }
 
-  async processUpload(file, shouldExtractText) {
+  async processUpload(file, shouldExtractText = true, corpusId = null) {
     const { originalname, buffer } = file;
     let textContent = null;
 
@@ -38,40 +38,58 @@ export class PdfService {
       textContent = await this.extractText(new Uint8Array(buffer));
     }
 
-    const existing = await this.pdfRepository.findByFilename(originalname);
     let result;
 
-    if (existing) {
-      result = await this.pdfRepository.update(
-        existing.id,
-        shouldExtractText ? null : buffer,
-        textContent
-      );
-    } else {
-      result = await this.pdfRepository.create(
+    if (corpusId) {
+      // Handle corpus document creation
+      result = await this.repository.createDocument(
+        corpusId,
         originalname,
-        shouldExtractText ? null : buffer,
         textContent
       );
-    }
 
-    if (textContent) {
-      try {
-        await documentQueue.add('process-document', {
-          documentId: result.id || existing.id,
-          filename: originalname,
-          text: textContent  // Include extracted text in job data
-        });
-      } catch (queueError) {
-        console.error('Error adding job to queue:', queueError);
+      return {
+        id: result.id,
+        filename: originalname,
+        status: 'PENDING',
+        text_content: textContent
+      };
+    } else {
+      // Handle PDF document creation/update (existing logic)
+      const existing = await this.repository.findByFilename(originalname);
+
+      if (existing) {
+        result = await this.repository.update(
+          existing.id,
+          shouldExtractText ? null : buffer,
+          textContent
+        );
+      } else {
+        result = await this.repository.create(
+          originalname,
+          shouldExtractText ? null : buffer,
+          textContent
+        );
       }
-    }
 
-    return {
-      id: result.id || existing.id,
-      filename: originalname,
-      status: 'PENDING',
-      text_content: textContent || (existing ? existing.text_content : null)
-    };
+      if (textContent) {
+        try {
+          await documentQueue.add('process-document', {
+            documentId: result.id || existing.id,
+            filename: originalname,
+            text: textContent
+          });
+        } catch (queueError) {
+          console.error('Error adding job to queue:', queueError);
+        }
+      }
+
+      return {
+        id: result.id || existing.id,
+        filename: originalname,
+        status: 'PENDING',
+        text_content: textContent || (existing ? existing.text_content : null)
+      };
+    }
   }
 }

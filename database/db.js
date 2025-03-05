@@ -48,7 +48,6 @@ export async function initializeDb(dbFilename = config.database.filename) {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             corpus_id INTEGER NOT NULL,
             filename TEXT NOT NULL,
-            pdf_content BLOB,
             text_content TEXT,
             status TEXT DEFAULT 'PENDING',
             upload_date DATETIME DEFAULT CURRENT_TIMESTAMP,

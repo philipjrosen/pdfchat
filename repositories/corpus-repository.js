@@ -20,10 +20,10 @@ export class CorpusRepository {
     );
   }
 
-  async createDocument(corpusId, filename, pdfContent) {
+  async createDocument(corpusId, filename, textContent) {
     const result = await dbAsync.run(
-      'INSERT INTO documents (corpus_id, filename, pdf_content, status) VALUES (?, ?, ?, ?)',
-      [corpusId, filename, pdfContent, 'PENDING']
+      'INSERT INTO documents (corpus_id, filename, text_content, status) VALUES (?, ?, ?, ?)',
+      [corpusId, filename, textContent, 'PENDING']
     );
     return {
       id: result.id,

@@ -311,25 +311,19 @@ export default function createRoutes(
       const corpus = await corpusRepository.create(title);
 
       // Process each file
-      const documents = [];
       for (const file of req.files) {
-        const doc = await corpusRepository.createDocument(
-          corpus.id,
-          file.originalname,
-          file.buffer
+        await pdfService.processUpload(
+          file,
+          true,  // always extract text
+          corpus.id
         );
-        documents.push({
-          id: doc.id,
-          filename: file.originalname,
-          status: 'PENDING'
-        });
       }
 
       res.json({
         id: corpus.id,
         title,
         status: 'PENDING',
-        documentCount: documents.length
+        documentCount: req.files.length
       });
     } catch (error) {
       handleError(res, error, 'Upload error:');
