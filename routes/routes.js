@@ -255,12 +255,54 @@ export default function createRoutes(
     }
   });
 
+  // Special corpus routes first
+  router.get('/corpus/schema', async (req, res) => {
+    try {
+      const schema = await corpusRepository.getSchema();
+      res.json(schema);
+    } catch (error) {
+      handleError(res, error, 'Error retrieving schema:');
+    }
+  });
+
+  router.post('/corpus/reset', async (req, res) => {
+    try {
+      await corpusRepository.reset();
+      res.json({ message: 'Corpus database reset successfully' });
+    } catch (error) {
+      handleError(res, error, 'Error resetting corpus database:');
+    }
+  });
+
+  // Then the parameterized routes
+  router.get('/corpus/:id', async (req, res) => {
+    try {
+      const corpus = await corpusRepository.getById(req.params.id);
+      if (!corpus) {
+        return res.status(404).json({ error: 'Corpus not found' });
+      }
+      res.json(corpus);
+    } catch (error) {
+      handleError(res, error, 'Error retrieving corpus:');
+    }
+  });
+
+  // General corpus routes last
+  router.get('/corpus', async (req, res) => {
+    try {
+      const corpora = await corpusRepository.list();
+      res.json(corpora);
+    } catch (error) {
+      handleError(res, error, 'Error retrieving corpora:');
+    }
+  });
+
   // Add new corpus route
   router.post('/corpus', handleMultipleUpload, async (req, res) => {
     try {
       const { title } = req.body;
       if (!title || !req.files?.length) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'Title and at least one document required' 
         });
       }
@@ -291,35 +333,6 @@ export default function createRoutes(
       });
     } catch (error) {
       handleError(res, error, 'Upload error:');
-    }
-  });
-
-  // Add this route
-  router.get('/corpus', async (req, res) => {
-    try {
-      const corpora = await corpusRepository.list();
-      res.json(corpora);
-    } catch (error) {
-      handleError(res, error, 'Error retrieving corpora:');
-    }
-  });
-
-  // Add this route with the other corpus routes
-  router.post('/corpus/reset', async (req, res) => {
-    try {
-      await corpusRepository.reset();
-      res.json({ message: 'Corpus database reset successfully' });
-    } catch (error) {
-      handleError(res, error, 'Error resetting corpus database:');
-    }
-  });
-
-  router.get('/corpus/schema', async (req, res) => {
-    try {
-      const schema = await corpusRepository.getSchema();
-      res.json(schema);
-    } catch (error) {
-      handleError(res, error, 'Error retrieving corpus schema:');
     }
   });
 

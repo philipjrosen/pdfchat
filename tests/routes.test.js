@@ -268,7 +268,8 @@ describe('Corpus Routes', () => {
       createDocument: jest.fn(),
       list: jest.fn(),
       reset: jest.fn(),
-      getSchema: jest.fn()
+      getSchema: jest.fn(),
+      getById: jest.fn()
     };
 
     const router = createRoutes(
@@ -362,6 +363,32 @@ describe('Corpus Routes', () => {
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('corpus');
       expect(response.body).toHaveProperty('documents');
+    });
+  });
+
+  describe('GET /corpus/:id', () => {
+    it('should return a specific corpus', async () => {
+      mockCorpusRepository.getById.mockResolvedValue({
+        id: 1,
+        title: 'Test Corpus',
+        status: 'PENDING'
+      });
+
+      const response = await request(app).get('/corpus/1');
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        id: 1,
+        title: 'Test Corpus',
+        status: 'PENDING'
+      });
+    });
+
+    it('should return 404 for non-existent corpus', async () => {
+      mockCorpusRepository.getById.mockResolvedValue(null);
+
+      const response = await request(app).get('/corpus/999');
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('Corpus not found');
     });
   });
 });
