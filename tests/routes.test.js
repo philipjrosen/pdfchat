@@ -257,3 +257,111 @@ describe('PDF Routes', () => {
     });
   });
 });
+
+describe('Corpus Routes', () => {
+  let app;
+  let mockCorpusRepository;
+
+  beforeEach(() => {
+    mockCorpusRepository = {
+      create: jest.fn(),
+      createDocument: jest.fn(),
+      list: jest.fn(),
+      reset: jest.fn(),
+      getSchema: jest.fn()
+    };
+
+    const router = createRoutes(
+      null,  // pdf service not needed for these tests
+      null,  // pdf repository not needed for these tests
+      null,  // question service not needed for these tests
+      mockCorpusRepository
+    );
+
+    app = express();
+    app.use(router);
+  });
+
+  describe('POST /corpus', () => {
+    it('should create a new corpus with documents', async () => {
+      mockCorpusRepository.create.mockResolvedValue({
+        id: 1,
+        title: 'Test Corpus',
+        status: 'PENDING'
+      });
+
+      mockCorpusRepository.createDocument.mockResolvedValue({
+        id: 1,
+        filename: 'test.pdf',
+        status: 'PENDING'
+      });
+
+      const response = await request(app)
+        .post('/corpus')
+        .field('title', 'Test Corpus')
+        .attach('documents', Buffer.from('fake pdf content'), 'test.pdf');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        id: 1,
+        title: 'Test Corpus',
+        status: 'PENDING',
+        documentCount: 1
+      });
+    });
+
+    it('should require a title', async () => {
+      const response = await request(app)
+        .post('/corpus')
+        .attach('documents', Buffer.from('fake pdf content'), 'test.pdf');
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Title and at least one document required');
+    });
+
+    it('should require at least one document', async () => {
+      const response = await request(app)
+        .post('/corpus')
+        .field('title', 'Test Corpus');
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Title and at least one document required');
+    });
+  });
+
+  describe('GET /corpus', () => {
+    it('should list all corpora', async () => {
+      mockCorpusRepository.list.mockResolvedValue([
+        { id: 1, title: 'Test Corpus 1', status: 'PENDING' },
+        { id: 2, title: 'Test Corpus 2', status: 'PENDING' }
+      ]);
+
+      const response = await request(app).get('/corpus');
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveLength(2);
+      expect(response.body.map(c => c.title)).toEqual(['Test Corpus 1', 'Test Corpus 2']);
+    });
+  });
+
+  describe('POST /corpus/reset', () => {
+    it('should reset all corpus data', async () => {
+      const response = await request(app).post('/corpus/reset');
+      expect(response.status).toBe(200);
+      expect(response.body.message).toBe('Corpus database reset successfully');
+    });
+  });
+
+  describe('GET /corpus/schema', () => {
+    it('should return corpus and documents schema', async () => {
+      mockCorpusRepository.getSchema.mockResolvedValue({
+        corpus: [{ name: 'title', type: 'TEXT' }],
+        documents: [{ name: 'corpus_id', type: 'INTEGER' }]
+      });
+
+      const response = await request(app).get('/corpus/schema');
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('corpus');
+      expect(response.body).toHaveProperty('documents');
+    });
+  });
+});

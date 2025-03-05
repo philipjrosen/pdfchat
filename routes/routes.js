@@ -5,12 +5,17 @@ import { documentQueue } from '../services/queue.js';
 import { PineconeService } from '../services/pinecone-service.js';
 import { QuestionService } from '../services/question-service.js';
 
-export default function createRoutes(pdfService, pdfRepository, questionServiceOverride) {
+export default function createRoutes(
+  pdfService,
+  pdfRepository,
+  questionServiceOverride,
+  corpusRepository
+) {
   const router = express.Router();
   const questionService = questionServiceOverride || new QuestionService();
 
-  // Configure multer for PDF uploads with error handling
-  const upload = multer({
+  // Change single upload configuration name
+  const singleUpload = multer({
     fileFilter: (req, file, cb) => {
       if (config.upload.allowedMimeTypes.includes(file.mimetype)) {
         cb(null, true);
@@ -25,9 +30,41 @@ export default function createRoutes(pdfService, pdfRepository, questionServiceO
     }
   }).single('pdf');
 
-  // Wrap upload middleware to handle errors
-  const handleUpload = (req, res, next) => {
-    upload(req, res, (err) => {
+  // Add multiple upload configuration
+  const multipleUpload = multer({
+    fileFilter: (req, file, cb) => {
+      if (config.upload.allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        const error = new Error('Only PDF files are allowed');
+        error.code = 'INVALID_FILE_TYPE';
+        cb(error);
+      }
+    },
+    limits: {
+      fileSize: config.upload.maxFileSize
+    }
+  }).array('documents');
+
+  // Rename existing upload handler
+  const handleSingleFileUpload = (req, res, next) => {
+    singleUpload(req, res, (err) => {
+      if (err) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: 'File size exceeds limit' });
+        }
+        if (err.code === 'INVALID_FILE_TYPE') {
+          return res.status(400).json({ error: err.message });
+        }
+        return res.status(400).json({ error: 'Invalid file upload' });
+      }
+      next();
+    });
+  };
+
+  // Add multiple upload handler
+  const handleMultipleUpload = (req, res, next) => {
+    multipleUpload(req, res, (err) => {
       if (err) {
         if (err.code === 'LIMIT_FILE_SIZE') {
           return res.status(400).json({ error: 'File size exceeds limit' });
@@ -66,8 +103,8 @@ export default function createRoutes(pdfService, pdfRepository, questionServiceO
     }
   });
 
-  // Upload endpoint with proper error handling
-  router.post('/upload', handleUpload, async (req, res) => {
+  // Update existing upload route to use new name
+  router.post('/upload', handleSingleFileUpload, async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No PDF file uploaded' });
@@ -215,6 +252,74 @@ export default function createRoutes(pdfService, pdfRepository, questionServiceO
       res.json({ answer });
     } catch (error) {
       handleError(res, error, 'Error processing question:');
+    }
+  });
+
+  // Add new corpus route
+  router.post('/corpus', handleMultipleUpload, async (req, res) => {
+    try {
+      const { title } = req.body;
+      if (!title || !req.files?.length) {
+        return res.status(400).json({ 
+          error: 'Title and at least one document required' 
+        });
+      }
+
+      // Create new corpus
+      const corpus = await corpusRepository.create(title);
+
+      // Process each file
+      const documents = [];
+      for (const file of req.files) {
+        const doc = await corpusRepository.createDocument(
+          corpus.id,
+          file.originalname,
+          file.buffer
+        );
+        documents.push({
+          id: doc.id,
+          filename: file.originalname,
+          status: 'PENDING'
+        });
+      }
+
+      res.json({
+        id: corpus.id,
+        title,
+        status: 'PENDING',
+        documentCount: documents.length
+      });
+    } catch (error) {
+      handleError(res, error, 'Upload error:');
+    }
+  });
+
+  // Add this route
+  router.get('/corpus', async (req, res) => {
+    try {
+      const corpora = await corpusRepository.list();
+      res.json(corpora);
+    } catch (error) {
+      handleError(res, error, 'Error retrieving corpora:');
+    }
+  });
+
+  // Add this route with the other corpus routes
+  router.post('/corpus/reset', async (req, res) => {
+    try {
+      await corpusRepository.reset();
+      res.json({ message: 'Corpus database reset successfully' });
+    } catch (error) {
+      handleError(res, error, 'Error resetting corpus database:');
+    }
+  });
+
+  router.get('/corpus/schema', async (req, res) => {
+    try {
+      const schema = await corpusRepository.getSchema();
+      res.json(schema);
+    } catch (error) {
+      handleError(res, error, 'Error retrieving corpus schema:');
     }
   });
 

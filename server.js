@@ -6,6 +6,7 @@ import createRoutes from './routes/routes.js';
 import './services/queue.js';  // Import for side effects (queue setup)
 import { worker } from './services/worker.js';  // Import the worker
 import cors from 'cors';
+import { CorpusRepository } from './repositories/corpus-repository.js';
 
 // Debug log raw environment variables
 console.log('Raw Environment Variables:', {
@@ -18,6 +19,7 @@ export const app = express();
 // Initialize repositories and services
 const pdfRepository = new PdfRepository();
 const pdfService = new PdfService(pdfRepository);
+const corpusRepository = new CorpusRepository();
 
 // Middleware
 app.use(express.json());
@@ -29,7 +31,13 @@ app.use(cors({
 }));
 
 // Routes
-app.use('/', createRoutes(pdfService, pdfRepository));
+const router = createRoutes(
+  pdfService,
+  pdfRepository,
+  null,  // no question service needed
+  corpusRepository
+);
+app.use('/', router);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
