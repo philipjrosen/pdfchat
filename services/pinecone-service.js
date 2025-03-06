@@ -36,15 +36,10 @@ export class PineconeService {
 
   async describeIndex() {
     try {
-      const description = await this.index.describeStats();
-      return {
-        totalVectorCount: description.totalVectorCount,
-        indexFullness: description.indexFullness,
-        dimensions: description.dimension
-      };
+      return await this.index.describeIndexStats();
     } catch (error) {
-      console.error('Pinecone stats error:', error);
-      throw new Error('Failed to get Pinecone stats');
+      console.error('Error describing Pinecone index:', error);
+      throw error;
     }
   }
 
