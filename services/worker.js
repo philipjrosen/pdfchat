@@ -98,7 +98,7 @@ export const worker = new Worker('document-processing', async (job) => {
   }
 }, {
   connection,
-  concurrency: 1
+  concurrency: 10
 });
 
 // Graceful shutdown
