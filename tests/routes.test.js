@@ -269,7 +269,8 @@ describe('Corpus Routes', () => {
       createDocument: jest.fn(),
       list: jest.fn(),
       reset: jest.fn(),
-      getSchema: jest.fn()
+      getSchema: jest.fn(),
+      listDocuments: jest.fn()
     };
 
     mockPdfService = {
@@ -371,6 +372,34 @@ describe('Corpus Routes', () => {
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('corpus');
       expect(response.body).toHaveProperty('documents');
+    });
+  });
+
+  describe('GET /documents', () => {
+    it('should list all documents', async () => {
+      mockCorpusRepository.listDocuments = jest.fn().mockResolvedValue([
+        {
+          id: 1,
+          corpus_id: 1,
+          filename: 'test1.pdf',
+          status: 'PENDING',
+          upload_date: '2024-01-01T00:00:00.000Z'
+        },
+        {
+          id: 2,
+          corpus_id: 1,
+          filename: 'test2.pdf',
+          status: 'PENDING',
+          upload_date: '2024-01-01T00:00:00.000Z'
+        }
+      ]);
+
+      const response = await request(app).get('/documents');
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveLength(2);
+      expect(response.body[0]).toHaveProperty('corpus_id');
+      expect(response.body[0]).toHaveProperty('filename');
+      expect(response.body[0]).toHaveProperty('status');
     });
   });
 });

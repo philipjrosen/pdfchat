@@ -57,4 +57,10 @@ export class CorpusRepository {
       }))
     };
   }
+
+  async listDocuments() {
+    return await dbAsync.all(
+      'SELECT * FROM documents ORDER BY upload_date DESC'
+    );
+  }
 }

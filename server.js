@@ -32,10 +32,9 @@ app.use(cors({
 
 // Routes
 const router = createRoutes(
-  pdfService,
   pdfRepository,
-  null,  // no question service needed
-  corpusRepository
+  corpusRepository,
+  null  // no question service needed
 );
 app.use('/', router);
 

@@ -8,8 +8,9 @@ pdfjsLib.GlobalWorkerOptions.disableWorker = true;
 pdfjsLib.GlobalWorkerOptions.standardFontDataUrl = `node_modules/pdfjs-dist/standard_fonts/`;
 
 export class PdfService {
-  constructor(repository) {
-    this.repository = repository;
+  constructor(pdfRepository, corpusRepository) {
+    this.pdfRepository = pdfRepository;
+    this.corpusRepository = corpusRepository;
   }
 
   async extractText(buffer) {
@@ -38,11 +39,9 @@ export class PdfService {
       textContent = await this.extractText(new Uint8Array(buffer));
     }
 
-    let result;
-
     if (corpusId) {
       // Handle corpus document creation
-      result = await this.repository.createDocument(
+      const result = await this.corpusRepository.createDocument(
         corpusId,
         originalname,
         textContent
@@ -56,16 +55,18 @@ export class PdfService {
       };
     } else {
       // Handle PDF document creation/update (existing logic)
-      const existing = await this.repository.findByFilename(originalname);
+      const existing = await this.pdfRepository.findByFilename(originalname);
+
+      let result;
 
       if (existing) {
-        result = await this.repository.update(
+        result = await this.pdfRepository.update(
           existing.id,
           shouldExtractText ? null : buffer,
           textContent
         );
       } else {
-        result = await this.repository.create(
+        result = await this.pdfRepository.create(
           originalname,
           shouldExtractText ? null : buffer,
           textContent

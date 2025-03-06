@@ -4,15 +4,17 @@ import { config } from '../config/config.js';
 import { documentQueue } from '../services/queue.js';
 import { PineconeService } from '../services/pinecone-service.js';
 import { QuestionService } from '../services/question-service.js';
+import { PdfService } from '../services/pdf-service.js';
 
 export default function createRoutes(
-  pdfService,
   pdfRepository,
-  questionServiceOverride,
-  corpusRepository
+  corpusRepository,
+  questionServiceOverride
 ) {
-  const router = express.Router();
+  const pdfService = new PdfService(pdfRepository, corpusRepository);
   const questionService = questionServiceOverride || new QuestionService();
+
+  const router = express.Router();
 
   // Change single upload configuration name
   const singleUpload = multer({
@@ -327,6 +329,16 @@ export default function createRoutes(
       });
     } catch (error) {
       handleError(res, error, 'Upload error:');
+    }
+  });
+
+  // List all documents
+  router.get('/documents', async (req, res) => {
+    try {
+      const documents = await corpusRepository.listDocuments();
+      res.json(documents);
+    } catch (error) {
+      handleError(res, error, 'Error retrieving documents:');
     }
   });
 
