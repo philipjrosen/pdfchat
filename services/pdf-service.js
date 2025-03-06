@@ -72,7 +72,8 @@ export class PdfService {
         await documentQueue.add('process-document', {
           documentId: result.id,
           filename: originalname,
-          text: textContent
+          text: textContent,
+          corpusId
         });
       } catch (queueError) {
         console.error('Error adding job to queue:', queueError);

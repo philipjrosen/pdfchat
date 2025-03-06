@@ -53,7 +53,7 @@ async function generateEmbeddings(text) {
 }
 
 export const worker = new Worker('document-processing', async (job) => {
-  const { documentId, filename, text } = job.data;
+  const { documentId, filename, text, corpusId } = job.data;
   log.info(`Processing document ${documentId} (${filename})`);
 
   try {
@@ -74,7 +74,8 @@ export const worker = new Worker('document-processing', async (job) => {
         values: chunk.embedding,
         metadata: {
           text: chunk.text,
-          document_id: pineconeId
+          document_id: pineconeId,
+          corpus_id: corpusId
         }
       }));
 
