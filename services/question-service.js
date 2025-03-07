@@ -8,14 +8,14 @@ export class QuestionService {
     this.pineconeService = new PineconeService();
   }
 
-  async getAnswer(documentId, question) {
+  async getAnswer(documentOrCorpusId, question, isCorpus = false) {
     try {
       // Get embeddings for the question
       const embedding = await this.getQuestionEmbedding(question);
 
       // Query Pinecone
-      const matches = await this.pineconeService.queryEmbeddings(embedding, documentId);
-
+      const matches = await this.pineconeService.queryEmbeddings(embedding, documentOrCorpusId, isCorpus);
+      console.log(`QuestionService: Found ${matches.length} matches`);
       if (!matches || !matches.length) {
         return "No relevant content found in the document to answer this question.";
       }

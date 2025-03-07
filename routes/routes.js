@@ -342,5 +342,21 @@ export default function createRoutes(
     }
   });
 
+  router.post('/corpus/ask/:corpusId', async (req, res) => {
+    try {
+      const { corpusId } = req.params;
+      const { question } = req.body;
+
+      if (!question) {
+        return res.status(400).json({ error: 'Question is required' });
+      }
+
+      const answer = await questionService.getAnswer(corpusId, question, true);
+      res.json({ answer });
+    } catch (error) {
+      handleError(res, error, 'Error processing corpus question:');
+    }
+  });
+
   return router;
 }

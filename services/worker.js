@@ -67,20 +67,24 @@ export const worker = new Worker('document-processing', async (job) => {
 
     // Store embeddings in Pinecone
     try {
-      const pineconeId = documentId.toString();
       // Create vectors with metadata for each chunk
       const vectors = chunks.map(chunk => ({
-        id: `${pineconeId}_${chunk.chunk_index}`,
+        id: `${documentId}_${chunk.chunk_index}`,
         values: chunk.embedding,
-        metadata: {
-          text: chunk.text,
-          document_id: pineconeId,
-          corpus_id: corpusId
-        }
+        metadata: corpusId
+          ? {
+              text: chunk.text,
+              document_id: documentId.toString(),
+              corpus_id: corpusId.toString()
+            }
+          : {
+              text: chunk.text,
+              document_id: documentId.toString()
+            }
       }));
 
       await pineconeService.upsert(vectors);
-      log.info(`Successfully stored ${vectors.length} chunks in Pinecone for document ${pineconeId}`);
+      log.info(`Successfully upserted ${vectors.length} chunks in Pinecone ${corpusId ? `for document ${documentId} in corpus ${corpusId}` : `for document ${documentId}`}`);
     } catch (error) {
       log.error('Pinecone upsert error:', error);
       throw error;

@@ -54,12 +54,12 @@ export class PineconeService {
     }
   }
 
-  async queryEmbeddings(embedding, documentId, topK = 3) {
+  async queryEmbeddings(embedding, documentOrCorpusId, isCorpus = false, topK = 3) {
     try {
-      console.log(`PineconeService: Querying for document ${documentId}`);
+      console.log(`PineconeService: Querying for ${isCorpus ? 'corpus' : 'document'} ${documentOrCorpusId}`);
       const response = await this.index.query({
         vector: embedding,
-        filter: { document_id: documentId },
+        filter: isCorpus ? { corpus_id: documentOrCorpusId } : { document_id: documentOrCorpusId },
         topK,
         includeMetadata: true
       });
