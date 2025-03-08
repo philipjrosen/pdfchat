@@ -260,35 +260,34 @@ describe('PDF Routes', () => {
 
 describe('Corpus Routes', () => {
   let app;
+  let mockPdfRepository;
   let mockCorpusRepository;
-  let mockPdfService;
 
   beforeEach(() => {
+    mockPdfRepository = {
+      // Add necessary mock methods
+    };
+
     mockCorpusRepository = {
       create: jest.fn(),
       createDocument: jest.fn(),
       list: jest.fn(),
       reset: jest.fn(),
       getSchema: jest.fn(),
-      listDocuments: jest.fn()
+      listDocuments: jest.fn(),
+      getById: jest.fn()
     };
-
-    mockPdfService = {
-      processUpload: jest.fn().mockResolvedValue({
-        id: 1,
-        filename: 'test.pdf',
-        status: 'PENDING'
-      })
-    };
-
-    const router = createRoutes(
-      mockPdfService,  // Add the mock pdf service
-      null,  // pdf repository not needed for these tests
-      null,  // question service not needed for these tests
-      mockCorpusRepository
-    );
 
     app = express();
+    app.use(express.json());
+
+    // Create routes with correct argument order
+    const router = createRoutes(
+      mockPdfRepository,
+      mockCorpusRepository,
+      null  // questionServiceOverride
+    );
+
     app.use(router);
   });
 

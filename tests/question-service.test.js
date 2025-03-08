@@ -93,7 +93,8 @@ describe('QuestionService', () => {
 
       expect(mockPineconeService.queryEmbeddings).toHaveBeenCalledWith(
         mockEmbedding,
-        mockDocumentId
+        mockDocumentId,
+        false
       );
       expect(mockOpenAIService.generateResponse).toHaveBeenCalledWith(
         mockQuestion,

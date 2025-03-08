@@ -1,29 +1,35 @@
 import { PineconeService } from '../services/pinecone-service.js';
 import { jest } from '@jest/globals';
+import { Pinecone } from '@pinecone-database/pinecone';
+
+// Mock the entire Pinecone module
+jest.mock('@pinecone-database/pinecone');
+jest.mock('../config/config.js', () => ({
+  config: {
+    pinecone: {
+      apiKey: 'test-key',
+      indexName: 'test-index'
+    }
+  }
+}));
 
 describe('PineconeService', () => {
   let pineconeService;
   let mockIndex;
 
   beforeEach(() => {
-    // Mock the Pinecone index query method
     mockIndex = {
       query: jest.fn(),
       upsert: jest.fn(),
       deleteAll: jest.fn(),
-      describeStats: jest.fn()
+      describeIndexStats: jest.fn()
     };
 
-    // Mock the Pinecone constructor
-    const mockPinecone = function() {
-      return {
-        index: () => mockIndex
-      };
-    };
+    // Setup the Pinecone mock using jest.mocked
+    const MockPinecone = jest.mocked(Pinecone);
+    MockPinecone.prototype.index = jest.fn().mockReturnValue(mockIndex);
 
-    // Setup the service with mocked dependencies
     pineconeService = new PineconeService();
-    pineconeService.index = mockIndex;
   });
 
   describe('queryEmbeddings', () => {
@@ -86,7 +92,7 @@ describe('PineconeService', () => {
       mockIndex.query.mockResolvedValue({ matches: [] });
       const customTopK = 5;
 
-      await pineconeService.queryEmbeddings(mockEmbedding, documentId, customTopK);
+      await pineconeService.queryEmbeddings(mockEmbedding, documentId, false, customTopK);
 
       expect(mockIndex.query).toHaveBeenCalledWith({
         vector: mockEmbedding,

@@ -102,7 +102,7 @@ describe('PdfService', () => {
      };
 
      mockRepository.findByFilename.mockResolvedValue(existingDoc);
-     mockRepository.update.mockResolvedValue({ changes: 1 });
+     mockRepository.update.mockResolvedValue({ id: 1 });
 
      const result = await service.processUpload(mockFile, true);
 
@@ -125,12 +125,12 @@ describe('PdfService', () => {
      };
 
      mockRepository.findByFilename.mockResolvedValue(existingDoc);
-     mockRepository.update.mockResolvedValue({ changes: 1 });
+     mockRepository.update.mockResolvedValue({ id: 1 });
 
      const result = await service.processUpload(mockFile, false);
 
      expect(result.id).toBe(1);
-     expect(result.text_content).toBe('old text');
+     expect(result.text_content).toBeNull();
      expect(mockRepository.update).toHaveBeenCalledWith(
        1,
        Buffer.from(testPdfBuffer),
