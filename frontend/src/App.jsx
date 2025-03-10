@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import FileUploadMultiple from './components/FileUploadMultiple';
+import FileUpload from './components/FileUpload';
 import ChatInterface from './components/ChatInterface';
 import DocumentList from './components/DocumentList';
 
@@ -38,14 +40,46 @@ const SidebarWrapper = styled.div`
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 `;
 
-const App = () => {
+const NavButton = styled(Link)`
+  background-color: #4a4a4a;
+  color: white;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  margin-bottom: 1rem;
+
+  &:hover {
+    background-color: #5a5a5a;
+  }
+`;
+
+const MainContent = () => {
   const [currentDocumentId, setCurrentDocumentId] = useState(null);
+  const location = useLocation();
+  const isUploadSingleView = location.pathname === '/upload-single-document';
 
   return (
     <AppContainer>
       <MainContentWrapper>
         <ChatWrapper>
-          <FileUploadMultiple onUploadSuccess={(id) => setCurrentDocumentId(id)} />
+          <NavButton to={isUploadSingleView ? '/' : '/upload-single-document'}>
+            Switch to {isUploadSingleView ? 'Multiple' : 'Single'} Upload
+          </NavButton>
+
+          <Routes>
+            <Route
+              path="/upload-single-document"
+              element={<FileUpload onUploadSuccess={(id) => setCurrentDocumentId(id)} />}
+            />
+            <Route
+              path="/"
+              element={<FileUploadMultiple onUploadSuccess={(id) => setCurrentDocumentId(id)} />}
+            />
+          </Routes>
+
           <ChatInterface documentId={currentDocumentId} />
         </ChatWrapper>
         <SidebarWrapper>
@@ -53,6 +87,14 @@ const App = () => {
         </SidebarWrapper>
       </MainContentWrapper>
     </AppContainer>
+  );
+};
+
+const App = () => {
+  return (
+    <BrowserRouter>
+      <MainContent />
+    </BrowserRouter>
   );
 };
 

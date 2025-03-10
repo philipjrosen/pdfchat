@@ -11,10 +11,11 @@ const UploadButton = styled.button`
   padding: 0.5rem 1rem;
   border: none;
   border-radius: 4px;
-  cursor: pointer;
+  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
+  opacity: ${props => props.disabled ? 0.5 : 1};
 
   &:hover {
-    background-color: #5a5a5a;
+    background-color: ${props => props.disabled ? '#4a4a4a' : '#5a5a5a'};
   }
 `;
 
@@ -80,11 +81,12 @@ const FileUploadMultiple = ({ onUploadSuccess }) => {
         style={{ display: 'none' }}
         id="file-upload-multiple"
         multiple
+        disabled={!title.trim()}
       />
       <UploadButton
         as="label"
         htmlFor="file-upload-multiple"
-        style={{ opacity: !title.trim() ? 0.5 : 1 }}
+        disabled={!title.trim()}
       >
         {uploading ? 'Uploading...' : 'Upload Multiple PDFs'}
       </UploadButton>
