@@ -82,9 +82,11 @@ const MainContent = () => {
 
           <ChatInterface documentId={currentDocumentId} />
         </ChatWrapper>
-        <SidebarWrapper>
-          <DocumentList onDocumentSelect={(id) => setCurrentDocumentId(id)} />
-        </SidebarWrapper>
+        {isUploadSingleView && (
+          <SidebarWrapper>
+            <DocumentList onDocumentSelect={(id) => setCurrentDocumentId(id)} />
+          </SidebarWrapper>
+        )}
       </MainContentWrapper>
     </AppContainer>
   );
