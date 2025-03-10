@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import styled from 'styled-components';
-import FileUpload from './components/FileUpload';
+import FileUploadMultiple from './components/FileUploadMultiple';
 import ChatInterface from './components/ChatInterface';
 import DocumentList from './components/DocumentList';
 
@@ -45,7 +45,7 @@ const App = () => {
     <AppContainer>
       <MainContentWrapper>
         <ChatWrapper>
-          <FileUpload onUploadSuccess={(id) => setCurrentDocumentId(id)} />
+          <FileUploadMultiple onUploadSuccess={(id) => setCurrentDocumentId(id)} />
           <ChatInterface documentId={currentDocumentId} />
         </ChatWrapper>
         <SidebarWrapper>
