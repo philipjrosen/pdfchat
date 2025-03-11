@@ -24,3 +24,6 @@ python_service/.env
 # IDE specific files (optional, but recommended)
 python_service/.vscode/
 python_service/.idea/
+
+# VSCode settings
+.vscode/
