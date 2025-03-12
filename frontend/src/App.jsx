@@ -57,9 +57,13 @@ const NavButton = styled(Link)`
 `;
 
 const MainContent = () => {
-  const [currentDocumentId, setCurrentDocumentId] = useState(null);
+  const [currentDocumentOrCorpusId, setCurrentDocumentOrCorpusId] = useState(null);
   const location = useLocation();
   const isUploadSingleView = location.pathname === '/upload-single-document';
+
+  const handleUploadSuccess = (id) => {
+    setCurrentDocumentOrCorpusId(id);
+  };
 
   return (
     <AppContainer>
@@ -72,19 +76,18 @@ const MainContent = () => {
           <Routes>
             <Route
               path="/upload-single-document"
-              element={<FileUpload onUploadSuccess={(id) => setCurrentDocumentId(id)} />}
+              element={<FileUpload onUploadSuccess={handleUploadSuccess} />}
             />
             <Route
               path="/"
-              element={<FileUploadMultiple onUploadSuccess={(id) => setCurrentDocumentId(id)} />}
+              element={<FileUploadMultiple onUploadSuccess={handleUploadSuccess} />}
             />
           </Routes>
-
-          <ChatInterface documentId={currentDocumentId} />
+          <ChatInterface documentOrCorpusId={currentDocumentOrCorpusId} isCorpus={!isUploadSingleView} />
         </ChatWrapper>
         {isUploadSingleView && (
           <SidebarWrapper>
-            <DocumentList onDocumentSelect={(id) => setCurrentDocumentId(id)} />
+            <DocumentList onDocumentSelect={(id) => setCurrentDocumentOrCorpusId(id)} />
           </SidebarWrapper>
         )}
       </MainContentWrapper>

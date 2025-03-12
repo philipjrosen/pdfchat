@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import styled from 'styled-components';
+import PropTypes from 'prop-types';
 
 const ChatContainer = styled.div`
   display: flex;
@@ -36,7 +37,7 @@ const SendButton = styled.button`
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  
+
   &:hover {
     background-color: #5a5a5a;
   }
@@ -44,27 +45,32 @@ const SendButton = styled.button`
 
 const Message = styled.div`
   margin-bottom: 1rem;
-  
+
   .question {
     color: #a0a0a0;
   }
-  
+
   .answer {
     color: white;
   }
 `;
 
-const ChatInterface = ({ documentId }) => {
+const ChatInterface = ({ documentOrCorpusId, isCorpus }) => {
   const [messages, setMessages] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!documentId || !currentQuestion.trim()) return;
+  console.log('documentOrCorpusId:', documentOrCorpusId);
 
+  const handleSubmit = async () => {
+    if (!documentOrCorpusId || !currentQuestion.trim()) return;
+    let path = `ask/${documentOrCorpusId}`;
     setLoading(true);
+    if (isCorpus) {
+      path = `corpus/ask/${documentOrCorpusId}`;
+    }
     try {
-      const response = await fetch(`http://localhost:3000/ask/${documentId}`, {
+      const response = await fetch(`http://localhost:3000/${path}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -104,16 +110,21 @@ const ChatInterface = ({ documentId }) => {
         value={currentQuestion}
         onChange={(e) => setCurrentQuestion(e.target.value)}
         placeholder="Ask a question about the PDF..."
-        disabled={!documentId || loading}
+        disabled={!documentOrCorpusId || loading}
       />
       <SendButton
         onClick={handleSubmit}
-        disabled={!documentId || loading || !currentQuestion.trim()}
+        disabled={!documentOrCorpusId || loading || !currentQuestion.trim()}
       >
         {loading ? 'Sending...' : 'Send'}
       </SendButton>
     </ChatContainer>
   );
+};
+
+ChatInterface.propTypes = {
+  documentOrCorpusId: PropTypes.string.isRequired,
+  isCorpus: PropTypes.bool.isRequired,
 };
 
 export default ChatInterface; 
