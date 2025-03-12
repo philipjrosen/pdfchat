@@ -54,7 +54,7 @@ export class PineconeService {
     }
   }
 
-  async queryEmbeddings(embedding, documentOrCorpusId, isCorpus = false, topK = 3) {
+  async queryEmbeddings(embedding, documentOrCorpusId, isCorpus = false, topK = 5) {
     try {
       console.log(`PineconeService: Querying for ${isCorpus ? 'corpus' : 'document'} ${documentOrCorpusId}`);
       const response = await this.index.query({
